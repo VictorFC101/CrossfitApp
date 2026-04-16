@@ -21,5 +21,12 @@ Cuando el usuario describa una tarea o bug, sigue siempre este orden:
 
 ## Estado actual
 
-- Pantalla prioritaria: Program/Home (UX/UI)
-- Bugs pendientes: friendship button state + onDeleteComment prop missing en FeedItem
+- Pantalla prioritaria: Program/Home (UX/UI) ✅ completada
+- ~~friendship button state~~ ✅ resuelto (aliases join PostgREST)
+- ~~onDeleteComment prop missing en FeedItem~~ ✅ ya estaba resuelto
+- Timer EMOM theme fijo ✅ resuelto (accentColor = t.accent)
+
+## Próximos candidatos
+
+- Timer Screen: sección "WOD HOY" con datos hardcodeados → conectar al programa activo
+- WodScreen: revisar mismo anti-patrón de inicialización que tenía HomeScreen
