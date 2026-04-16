@@ -55,7 +55,7 @@ export default function TimerScreen() {
   const display = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   const progress = totalSecs > 0 ? seconds / (mode === 'EMOM' ? emomRoundSecs : totalSecs) : 1;
   const timerStatus = running ? 'EN CURSO' : seconds === 0 ? '¡TIEMPO!' : '  LISTO  ';
-  const accentColor = mode === 'EMOM' ? '#f4a261' : t.accent;
+  const accentColor = t.accent;
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -103,16 +103,16 @@ export default function TimerScreen() {
         )}
 
         {mode === 'EMOM' && (
-          <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: '#f4a26130', borderRadius: 12, padding: 14, width: '100%', marginBottom: 20 }}>
-            <Text style={{ fontSize: t.fs(10), color: '#f4a261', letterSpacing: 2, marginBottom: 14, fontWeight: '700' }}>CONFIGURAR EMOM</Text>
+          <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: accentColor + '30', borderRadius: 12, padding: 14, width: '100%', marginBottom: 20 }}>
+            <Text style={{ fontSize: t.fs(10), color: accentColor, letterSpacing: 2, marginBottom: 14, fontWeight: '700' }}>CONFIGURAR EMOM</Text>
             <View style={{ flexDirection: 'row', gap: 12, marginBottom: 14 }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 1, marginBottom: 6 }}>MIN / RONDA</Text>
                 <View style={{ flexDirection: 'row', gap: 4 }}>
                   {['1', '2', '3'].map(m => (
                     <TouchableOpacity key={m} onPress={() => setEmomMins(m)}
-                      style={{ flex: 1, padding: 8, backgroundColor: emomMins === m ? '#f4a26120' : t.bg4, borderWidth: 1, borderColor: emomMins === m ? '#f4a261' : t.border, borderRadius: 8, alignItems: 'center' }}>
-                      <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: emomMins === m ? '#f4a261' : t.text2 }}>{m}'</Text>
+                      style={{ flex: 1, padding: 8, backgroundColor: emomMins === m ? accentColor + '20' : t.bg4, borderWidth: 1, borderColor: emomMins === m ? accentColor : t.border, borderRadius: 8, alignItems: 'center' }}>
+                      <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: emomMins === m ? accentColor : t.text2 }}>{m}'</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -122,8 +122,8 @@ export default function TimerScreen() {
                 <View style={{ flexDirection: 'row', gap: 4 }}>
                   {['8', '10', '12'].map(r => (
                     <TouchableOpacity key={r} onPress={() => setEmomRounds(r)}
-                      style={{ flex: 1, padding: 8, backgroundColor: emomRounds === r ? '#f4a26120' : t.bg4, borderWidth: 1, borderColor: emomRounds === r ? '#f4a261' : t.border, borderRadius: 8, alignItems: 'center' }}>
-                      <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: emomRounds === r ? '#f4a261' : t.text2 }}>{r}</Text>
+                      style={{ flex: 1, padding: 8, backgroundColor: emomRounds === r ? accentColor + '20' : t.bg4, borderWidth: 1, borderColor: emomRounds === r ? accentColor : t.border, borderRadius: 8, alignItems: 'center' }}>
+                      <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: emomRounds === r ? accentColor : t.text2 }}>{r}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -131,30 +131,30 @@ export default function TimerScreen() {
             </View>
             <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 12 }}>
               <TextInput value={emomMins} onChangeText={setEmomMins} keyboardType="numeric" placeholderTextColor={t.text3} placeholder="min"
-                style={{ flex: 1, backgroundColor: t.bg4, borderWidth: 1, borderColor: '#f4a26140', borderRadius: 8, color: t.text, fontSize: t.fs(16), fontWeight: '700', padding: 10, textAlign: 'center' }} />
+                style={{ flex: 1, backgroundColor: t.bg4, borderWidth: 1, borderColor: accentColor + '40', borderRadius: 8, color: t.text, fontSize: t.fs(16), fontWeight: '700', padding: 10, textAlign: 'center' }} />
               <Text style={{ color: t.text2, fontSize: t.fs(14) }}>×</Text>
               <TextInput value={emomRounds} onChangeText={setEmomRounds} keyboardType="numeric" placeholderTextColor={t.text3} placeholder="rondas"
-                style={{ flex: 1, backgroundColor: t.bg4, borderWidth: 1, borderColor: '#f4a26140', borderRadius: 8, color: t.text, fontSize: t.fs(16), fontWeight: '700', padding: 10, textAlign: 'center' }} />
+                style={{ flex: 1, backgroundColor: t.bg4, borderWidth: 1, borderColor: accentColor + '40', borderRadius: 8, color: t.text, fontSize: t.fs(16), fontWeight: '700', padding: 10, textAlign: 'center' }} />
               <Text style={{ color: t.text2, fontSize: t.fs(14) }}>=</Text>
               <View style={{ flex: 1, alignItems: 'center' }}>
-                <Text style={{ fontSize: t.fs(16), fontWeight: '900', color: '#f4a261' }}>{parseInt(emomMins || 0) * parseInt(emomRounds || 0)} min</Text>
+                <Text style={{ fontSize: t.fs(16), fontWeight: '900', color: accentColor }}>{parseInt(emomMins || 0) * parseInt(emomRounds || 0)} min</Text>
               </View>
             </View>
-            <TouchableOpacity onPress={applyEmom} style={{ backgroundColor: '#f4a261', borderRadius: 8, padding: 12, alignItems: 'center' }}>
-              <Text style={{ color: '#07070e', fontWeight: '900', fontSize: t.fs(13), letterSpacing: 1 }}>APLICAR EMOM</Text>
+            <TouchableOpacity onPress={applyEmom} style={{ backgroundColor: accentColor, borderRadius: 8, padding: 12, alignItems: 'center' }}>
+              <Text style={{ color: '#fff', fontWeight: '900', fontSize: t.fs(13), letterSpacing: 1 }}>APLICAR EMOM</Text>
             </TouchableOpacity>
           </View>
         )}
 
         {mode === 'EMOM' && (
-          <View style={{ backgroundColor: t.dark ? '#1a0e04' : '#fff3e0', borderWidth: 1, borderColor: '#f4a26140', borderRadius: 12, padding: 14, width: '100%', marginBottom: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View style={{ backgroundColor: accentColor + '12', borderWidth: 1, borderColor: accentColor + '40', borderRadius: 12, padding: 14, width: '100%', marginBottom: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View>
-              <Text style={{ fontSize: t.fs(10), color: '#f4a261', letterSpacing: 2, fontWeight: '700' }}>RONDA ACTUAL</Text>
+              <Text style={{ fontSize: t.fs(10), color: accentColor, letterSpacing: 2, fontWeight: '700' }}>RONDA ACTUAL</Text>
               <Text style={{ fontSize: t.fs(36), fontWeight: '900', color: t.text, marginTop: 2 }}>{currentEmomRound} <Text style={{ fontSize: t.fs(16), color: t.text3 }}>/ {totalRounds}</Text></Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 1 }}>TOTAL</Text>
-              <Text style={{ fontSize: t.fs(20), fontWeight: '900', color: '#f4a261' }}>{parseInt(emomMins || 0) * parseInt(emomRounds || 0)} min</Text>
+              <Text style={{ fontSize: t.fs(20), fontWeight: '900', color: accentColor }}>{parseInt(emomMins || 0) * parseInt(emomRounds || 0)} min</Text>
             </View>
           </View>
         )}
