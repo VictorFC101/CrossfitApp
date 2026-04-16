@@ -140,8 +140,6 @@ function FriendsTab({ t }) {
     myUserId, esAmigo
   } = useSocial();
 
-  console.log('SOLICITUDES ENVIADAS EN FRIENDSTAB:', solicitudesEnviadas);
-
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -251,9 +249,6 @@ function FriendsTab({ t }) {
         searchResults.map(user => {
           const yaAmigo = esAmigo(user.id);
           const yaEnviada = solicitudesEnviadas.includes(user.id);
-          console.log('USER ID:', user.id, 'YA ENVIADA:', yaEnviada, 'ENVIADAS:', solicitudesEnviadas);
-          console.log('LENGTHS:', user.id.length, solicitudesEnviadas[0]?.length);
-          console.log('CHARCODE:', user.id.charCodeAt(0), solicitudesEnviadas[0]?.charCodeAt(0));
           return (
             <View key={user.id} style={{
               backgroundColor: t.card,
@@ -305,7 +300,7 @@ function FriendsTab({ t }) {
             MIS AMIGOS ({amistades.length})
           </Text>
           {amistades.map(a => {
-            const friend = a.user_id === myUserId ? a.receptor : a.solicitante;
+            const friend = a.solicitante?.id === myUserId ? a.receptor : a.solicitante;
             if (!friend) return null;
             return (
               <View key={a.id} style={{ backgroundColor: t.card, borderWidth: 1, borderColor: '#52b78830', borderRadius: 10, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 10 }}>

@@ -88,11 +88,11 @@ export function SocialProvider({ children }) {
       if (data) {
         setAmistades(data.filter(a => a.status === 'aceptada'));
         setSolicitudesPendientes(data.filter(a =>
-          a.status === 'pendiente' && a.friend_id === userId
+          a.status === 'pendiente' && a.receptor?.id === userId
         ));
         setSolicitudesEnviadas(data.filter(a =>
-          a.status === 'pendiente' && a.user_id === userId
-        ).map(a => a.friend_id));
+          a.status === 'pendiente' && a.solicitante?.id === userId
+        ).map(a => a.receptor?.id));
       }
     } catch (e) { console.log('loadAmistades ERROR:', e.message); }
   };
@@ -149,8 +149,8 @@ export function SocialProvider({ children }) {
   };
 
   const esAmigo = (userId) => amistades.some(a =>
-    (a.user_id === myUserId && a.friend_id === userId) ||
-    (a.friend_id === myUserId && a.user_id === userId)
+    (a.solicitante?.id === myUserId && a.receptor?.id === userId) ||
+    (a.receptor?.id === myUserId && a.solicitante?.id === userId)
   );
 
   const getAmigoData = (feedItem) => {
