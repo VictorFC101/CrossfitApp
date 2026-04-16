@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { typeColors } from '../data';
 import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
@@ -42,6 +42,8 @@ function Section({ title, accent, children, defaultOpen = false }) {
 function MiniCalendar({ currentIdx, onSelect, allDays }) {
   const t = useTheme();
   const today = getToday();
+  const scrollRef = useRef(null);
+  const monthYPositions = useRef({});
 
   const programDates = allDays.map(d => parseDateFromDay(d.day)).filter(Boolean);
   if (programDates.length === 0) return null;
@@ -71,64 +73,110 @@ function MiniCalendar({ currentIdx, onSelect, allDays }) {
   const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const DAY_LABELS = ['L','M','X','J','V','S','D'];
 
-  return (
-    <View style={{ backgroundColor: t.card, borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: t.border }}>
-      <Text style={{ fontSize: t.fs(11), fontWeight: '900', color: t.text, letterSpacing: 2, marginBottom: 12, textAlign: 'center' }}>
-        CALENDARIO {minDate.getFullYear()}
-      </Text>
-      {months.map(({ year, month }) => {
-        const firstDay = new Date(year, month, 1).getDay();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const offset = firstDay === 0 ? 6 : firstDay - 1;
-        const cells = Array(offset).fill(null);
-        for (let i = 1; i <= daysInMonth; i++) cells.push(i);
-        while (cells.length % 7 !== 0) cells.push(null);
-        const hasProgram = cells.some(cell => cell && !!programDayMap[`${year}-${month}-${cell}`]);
+  // Clave del mes real de hoy (o el más cercano con programa)
+  const todayMonthKey = `${today.getFullYear()}-${today.getMonth()}`;
 
-        return (
-          <View key={`${year}-${month}`} style={{ marginBottom: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
-              <Text style={{ fontSize: t.fs(10), fontWeight: '900', color: hasProgram ? t.accent : t.text3, letterSpacing: 2, paddingHorizontal: 10 }}>
-                {MONTH_NAMES[month].toUpperCase()} {year}
-              </Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
-            </View>
-            <View style={{ flexDirection: 'row', marginBottom: 4 }}>
-              {DAY_LABELS.map(d => (
-                <Text key={d} style={{ flex: 1, textAlign: 'center', fontSize: t.fs(8), color: t.text3, fontWeight: '700' }}>{d}</Text>
-              ))}
-            </View>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-              {cells.map((cell, i) => {
-                if (!cell) return <View key={`e-${month}-${i}`} style={{ width: '14.28%', aspectRatio: 1 }} />;
-                const key = `${year}-${month}-${cell}`;
-                const prog = programDayMap[key];
-                const isActive = currentDate && currentDate.getDate() === cell && currentDate.getMonth() === month && currentDate.getFullYear() === year;
-                const isRealToday = cell === today.getDate() && month === today.getMonth() && year === today.getFullYear();
-                const accent = prog ? typeAccents[prog.type] || t.accent : null;
-                const past = new Date(year, month, cell) < today;
-                return (
-                  <TouchableOpacity key={key} onPress={() => prog && onSelect(prog.idx)}
-                    style={{ width: '14.28%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center' }}>
-                    <View style={{
-                      width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-                      backgroundColor: isActive ? accent || t.accent : isRealToday ? t.accent + '30' : prog ? accent + '15' : 'transparent',
-                      borderWidth: isRealToday && !isActive ? 2 : 0,
-                      borderColor: isRealToday ? t.accent : 'transparent',
-                      opacity: prog ? 1 : past ? 0.25 : 0.4,
-                    }}>
-                      <Text style={{ fontSize: t.fs(9), fontWeight: prog || isRealToday ? '700' : '400', color: isActive ? '#fff' : isRealToday ? t.accent : prog ? accent : t.text3 }}>{cell}</Text>
-                    </View>
-                    {prog && past && !isActive && <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#52b788', position: 'absolute', bottom: 2 }} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        );
-      })}
-      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 14, marginTop: 4, paddingTop: 10, borderTopWidth: 1, borderTopColor: t.border }}>
+  // Auto-scroll al mes actual al montar el calendario
+  useLayoutEffect(() => {
+    const y = monthYPositions.current[todayMonthKey];
+    if (scrollRef.current && y !== undefined) {
+      setTimeout(() => {
+        scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: false });
+      }, 50);
+    }
+  }, []);
+
+  return (
+    <View style={{ backgroundColor: t.card, borderRadius: 10, borderWidth: 1, borderColor: t.border, marginBottom: 10, overflow: 'hidden' }}>
+      {/* Título fijo */}
+      <View style={{ padding: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: t.border }}>
+        <Text style={{ fontSize: t.fs(11), fontWeight: '900', color: t.text, letterSpacing: 2, textAlign: 'center' }}>
+          CALENDARIO DEL PROGRAMA
+        </Text>
+      </View>
+
+      {/* Meses scrollables — altura fija para mostrar siempre ~2 meses */}
+      <ScrollView
+        ref={scrollRef}
+        style={{ maxHeight: 480 }}
+        showsVerticalScrollIndicator={false}
+        nestedScrollEnabled={true}
+      >
+        <View style={{ padding: 12 }}>
+          {months.map(({ year, month }) => {
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const offset = firstDay === 0 ? 6 : firstDay - 1;
+            const cells = Array(offset).fill(null);
+            for (let i = 1; i <= daysInMonth; i++) cells.push(i);
+            while (cells.length % 7 !== 0) cells.push(null);
+            const hasProgram = cells.some(cell => cell && !!programDayMap[`${year}-${month}-${cell}`]);
+            const isCurrentMonth = `${year}-${month}` === todayMonthKey;
+
+            return (
+              <View
+                key={`${year}-${month}`}
+                style={{ marginBottom: 16 }}
+                onLayout={(e) => {
+                  monthYPositions.current[`${year}-${month}`] = e.nativeEvent.layout.y;
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{ flex: 1, height: 1, backgroundColor: isCurrentMonth ? t.accent + '60' : t.border }} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10 }}>
+                    {isCurrentMonth && (
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.accent }} />
+                    )}
+                    <Text style={{ fontSize: t.fs(10), fontWeight: '900', color: isCurrentMonth ? t.accent : hasProgram ? t.text2 : t.text3, letterSpacing: 2 }}>
+                      {MONTH_NAMES[month].toUpperCase()} {year}
+                    </Text>
+                    {isCurrentMonth && (
+                      <View style={{ backgroundColor: t.accent, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                        <Text style={{ fontSize: t.fs(7), color: '#fff', fontWeight: '900', letterSpacing: 1 }}>HOY</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={{ flex: 1, height: 1, backgroundColor: isCurrentMonth ? t.accent + '60' : t.border }} />
+                </View>
+                <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                  {DAY_LABELS.map(d => (
+                    <Text key={d} style={{ flex: 1, textAlign: 'center', fontSize: t.fs(8), color: t.text3, fontWeight: '700' }}>{d}</Text>
+                  ))}
+                </View>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                  {cells.map((cell, i) => {
+                    if (!cell) return <View key={`e-${month}-${i}`} style={{ width: '14.28%', aspectRatio: 1 }} />;
+                    const key = `${year}-${month}-${cell}`;
+                    const prog = programDayMap[key];
+                    const isActive = currentDate && currentDate.getDate() === cell && currentDate.getMonth() === month && currentDate.getFullYear() === year;
+                    const isRealToday = cell === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+                    const accent = prog ? typeAccents[prog.type] || t.accent : null;
+                    const past = new Date(year, month, cell) < today;
+                    return (
+                      <TouchableOpacity key={key} onPress={() => prog && onSelect(prog.idx)}
+                        style={{ width: '14.28%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center' }}>
+                        <View style={{
+                          width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center',
+                          backgroundColor: isActive ? accent || t.accent : isRealToday ? t.accent + '30' : prog ? accent + '15' : 'transparent',
+                          borderWidth: isRealToday && !isActive ? 2 : 0,
+                          borderColor: isRealToday ? t.accent : 'transparent',
+                          opacity: prog ? 1 : past ? 0.25 : 0.4,
+                        }}>
+                          <Text style={{ fontSize: t.fs(9), fontWeight: prog || isRealToday ? '700' : '400', color: isActive ? '#fff' : isRealToday ? t.accent : prog ? accent : t.text3 }}>{cell}</Text>
+                        </View>
+                        {prog && past && !isActive && <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#52b788', position: 'absolute', bottom: 2 }} />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </ScrollView>
+
+      {/* Leyenda fija en la base */}
+      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 14, paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, borderTopColor: t.border }}>
         {[{ color: '#e63946', label: 'Halterofilia' }, { color: '#4895ef', label: 'Fuerza' }, { color: '#f4a261', label: 'Open Gym' }].map(l => (
           <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: l.color }} />
@@ -140,29 +188,179 @@ function MiniCalendar({ currentIdx, onSelect, allDays }) {
   );
 }
 
+const WOD_LIBRE_POR_DIA = {
+  0: {
+    tipo: 'DESCANSO ACTIVO',
+    icono: '🌿',
+    color: '#52b788',
+    duracion: '20-30 min',
+    formato: 'MOVILIDAD',
+    movimientos: [
+      { reps: '2 min', name: 'Foam rolling piernas' },
+      { reps: '10/lado', name: 'Hip circles + world greatest stretch' },
+      { reps: '10', name: 'Cat-cow thoracic' },
+      { reps: '2 min/lado', name: 'Pigeon pose' },
+    ],
+    nota: 'Prioriza recuperar. Sin intensidad.',
+  },
+  1: {
+    tipo: 'FUERZA CORPORAL',
+    icono: '💪',
+    color: '#4895ef',
+    duracion: '20 min',
+    formato: 'EMOM',
+    movimientos: [
+      { reps: 'Min 1', name: '12 Push-ups + 10 Air squats' },
+      { reps: 'Min 2', name: '8 Dips + 12 Reverse lunges' },
+      { reps: 'Min 3', name: '6 Pike push-ups + 15 Glute bridges' },
+      { reps: 'Min 4', name: 'Max hollow hold (30 sec obj.)' },
+    ],
+    nota: '× 5 rondas. Escala reps para mantener el minuto.',
+  },
+  2: {
+    tipo: 'CARDIO',
+    icono: '🔥',
+    color: '#e63946',
+    duracion: '15 min',
+    formato: 'AMRAP',
+    movimientos: [
+      { reps: '200m', name: 'Carrera (o 30 dobles salto)' },
+      { reps: '15', name: 'Box jumps / Step-ups' },
+      { reps: '10', name: 'Burpees' },
+      { reps: '15', name: 'Kettlebell swings (o mochila)' },
+    ],
+    nota: 'Ritmo sostenible — no sprint en primera ronda.',
+  },
+  3: {
+    tipo: 'TÉCNICA',
+    icono: '🎯',
+    color: '#9b59b6',
+    duracion: '30-40 min',
+    formato: 'SKILL WORK',
+    movimientos: [
+      { reps: '4×5 min', name: 'Práctica movimiento técnico (ej. muscle-up)' },
+      { reps: '3×8', name: 'Trabajo específico de debilidad personal' },
+      { reps: '10 min', name: 'Movilidad hombros + caderas' },
+    ],
+    nota: 'Calidad sobre cantidad. Sin fatiga acumulada.',
+  },
+  4: {
+    tipo: 'FUERZA + CARDIO',
+    icono: '⚡',
+    color: '#f4a261',
+    duracion: '25 min',
+    formato: 'FOR TIME',
+    movimientos: [
+      { reps: '5 rondas', name: '———————————————' },
+      { reps: '10', name: 'Push-ups archer (5/lado)' },
+      { reps: '10', name: 'Sentadillas búlgaras (5/lado)' },
+      { reps: '10', name: 'Remo invertido (o ring rows)' },
+      { reps: '200m', name: 'Carrera o 20 saltos' },
+    ],
+    nota: '2 min descanso entre rondas.',
+  },
+  5: {
+    tipo: 'CHIPPER',
+    icono: '🏋️',
+    color: '#e63946',
+    duracion: 'For Time',
+    formato: 'BENCHMARK',
+    movimientos: [
+      { reps: '50', name: 'Air squats' },
+      { reps: '40', name: 'Sit-ups' },
+      { reps: '30', name: 'Push-ups' },
+      { reps: '20', name: 'Pull-ups / Ring rows' },
+      { reps: '10', name: 'Burpees' },
+    ],
+    nota: 'Cap 20 min. Anota tu tiempo para repetirlo.',
+  },
+  6: {
+    tipo: 'PAREJA / EQUIPO',
+    icono: '🤝',
+    color: '#4895ef',
+    duracion: '30 min',
+    formato: 'YOU GO I GO',
+    movimientos: [
+      { reps: '10 rondas', name: '———————————————' },
+      { reps: '10', name: 'Synchro air squats' },
+      { reps: '15', name: 'Box jumps alternos' },
+      { reps: '200m', name: 'Carrera juntos' },
+    ],
+    nota: 'Una persona trabaja mientras la otra descansa.',
+  },
+};
+
 function FreeDayToday({ navigate }) {
   const t = useTheme();
   const today = new Date();
   const dayNames = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
   const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const wod = WOD_LIBRE_POR_DIA[today.getDay()];
+
   return (
     <View style={{ padding: 14 }}>
+      {/* CABECERA DÍA REAL */}
       <View style={{ backgroundColor: t.accent + '15', borderWidth: 2, borderColor: t.accent + '40', borderRadius: 12, padding: 16, marginBottom: 14, alignItems: 'center' }}>
         <Text style={{ fontSize: t.fs(9), color: t.accent, letterSpacing: 3, fontWeight: '700', marginBottom: 4 }}>HOY</Text>
         <Text style={{ fontSize: t.fs(24), fontWeight: '900', color: t.text, letterSpacing: 1 }}>{dayNames[today.getDay()].toUpperCase()}</Text>
         <Text style={{ fontSize: t.fs(13), color: t.text2, marginTop: 4 }}>{today.getDate()} de {monthNames[today.getMonth()]} de {today.getFullYear()}</Text>
+        <View style={{ marginTop: 8, backgroundColor: '#f4a26130', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 }}>
+          <Text style={{ fontSize: t.fs(9), color: '#f4a261', fontWeight: '700', letterSpacing: 2 }}>SIN ENTRENO PROGRAMADO</Text>
+        </View>
       </View>
-      <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 20, alignItems: 'center', marginBottom: 14 }}>
-        <Text style={{ fontSize: t.fs(24), marginBottom: 10 }}>🕊️</Text>
-        <Text style={{ fontSize: t.fs(15), fontWeight: '900', color: t.text, marginBottom: 6 }}>Sin entreno programado</Text>
-        <Text style={{ fontSize: t.fs(12), color: t.text3, textAlign: 'center', lineHeight: t.fs(18) }}>
-          Hoy no hay sesión en el programa. Puedes crear un WOD libre o descansar.
-        </Text>
+
+      {/* WOD LIBRE SUGERIDO */}
+      <View style={{ backgroundColor: t.card, borderWidth: 2, borderColor: wod.color + '40', borderRadius: 12, marginBottom: 14, overflow: 'hidden' }}>
+        {/* Header WOD */}
+        <View style={{ backgroundColor: wod.color + '18', padding: 12, borderBottomWidth: 1, borderBottomColor: wod.color + '30' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontSize: t.fs(20) }}>{wod.icono}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: t.fs(9), color: wod.color, fontWeight: '900', letterSpacing: 3 }}>WOD LIBRE SUGERIDO</Text>
+              <Text style={{ fontSize: t.fs(16), fontWeight: '900', color: t.text, letterSpacing: 0.5, marginTop: 1 }}>{wod.tipo}</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={{ fontSize: t.fs(8), color: t.text3, letterSpacing: 1 }}>{wod.formato}</Text>
+              <Text style={{ fontSize: t.fs(11), fontWeight: '700', color: wod.color }}>{wod.duracion}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Movimientos */}
+        <View style={{ padding: 12 }}>
+          {wod.movimientos.map((m, i) => (
+            <View key={i} style={{
+              flexDirection: 'row', gap: 10,
+              backgroundColor: m.name.startsWith('—') ? 'transparent' : t.bg4,
+              borderLeftWidth: m.name.startsWith('—') ? 0 : 3,
+              borderLeftColor: wod.color,
+              borderRadius: 8, padding: m.name.startsWith('—') ? 4 : 10,
+              marginBottom: 6,
+            }}>
+              {!m.name.startsWith('—') && (
+                <>
+                  <Text style={{ minWidth: 46, fontSize: t.fs(11), fontWeight: '700', color: wod.color }}>{m.reps}</Text>
+                  <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text, flex: 1 }}>{m.name}</Text>
+                </>
+              )}
+              {m.name.startsWith('—') && (
+                <Text style={{ fontSize: t.fs(9), color: t.text3, letterSpacing: 1 }}>{m.reps}</Text>
+              )}
+            </View>
+          ))}
+          {wod.nota && (
+            <View style={{ backgroundColor: t.dark ? '#080f08' : '#e8f5e9', borderWidth: 1, borderColor: t.dark ? '#1e3e1e' : '#c8e6c9', borderRadius: 6, padding: 8, marginTop: 4 }}>
+              <Text style={{ fontSize: t.fs(11), color: '#5a9a5a' }}>💡 {wod.nota}</Text>
+            </View>
+          )}
+        </View>
       </View>
+
+      {/* CTAs */}
       <TouchableOpacity onPress={() => navigate('HISTORIAL')}
         style={{ backgroundColor: t.accent, borderRadius: 12, padding: 14, alignItems: 'center', marginBottom: 10 }}>
         <Text style={{ fontSize: t.fs(14), fontWeight: '900', color: '#fff', letterSpacing: 1 }}>🔓 CREAR WOD LIBRE</Text>
-        <Text style={{ fontSize: t.fs(10), color: '#ffffff99', marginTop: 3 }}>Ir a Historial → + WOD Libre</Text>
+        <Text style={{ fontSize: t.fs(10), color: '#ffffff99', marginTop: 3 }}>Personaliza o usa la sugerencia de hoy</Text>
       </TouchableOpacity>
       <TouchableOpacity onPress={() => navigate && navigate('showProgram')}
         style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 12, alignItems: 'center' }}>
@@ -186,14 +384,13 @@ export default function HomeScreen({ navigate }) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showFreeDay, setShowFreeDay] = useState(false);
 
-  // Sincronizar con el día de hoy cuando el programa carga
-  const [initialized, setInitialized] = useState(false);
-  if (!initialized && allDays.length > 0) {
-    setInitialized(true);
-    const idx = getInitialIdx(allDays);
-    setCurrentIdx(idx);
-    setShowFreeDay(!isTodayInProgram(allDays));
-  }
+  // Sincronizar siempre con el día real cuando el programa activo cambia
+  useEffect(() => {
+    if (allDays.length > 0) {
+      setCurrentIdx(getInitialIdx(allDays));
+      setShowFreeDay(!isTodayInProgram(allDays));
+    }
+  }, [activeProgram]);
 
   if (loading || !plan || allDays.length === 0) {
     return (
