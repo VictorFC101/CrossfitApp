@@ -145,13 +145,7 @@ export function AppProvider({ children }) {
           notas: data.notas,
           fecha: data.fecha,
         });
-        // Publicar en feed
-        await supabase.from('feed_actividad').insert({
-          user_id: user.id,
-          tipo: 'wod_completado',
-          data: { dia: key, resultado: data.resultado, notas: data.notas },
-        });
-        // Feed social
+        // Publicar en feed social
         await supabase.from('feed_actividad').insert({
           user_id: user.id,
           tipo: 'wod_completado',
