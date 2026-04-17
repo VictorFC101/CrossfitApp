@@ -27,6 +27,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "abce4203-fc54-4dc8-9646-c11af1967ae1"
+      }
+    },
+    "owner": "victorfc"
   }
 }
