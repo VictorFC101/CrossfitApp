@@ -7,6 +7,7 @@ import { useApp } from '../AppContext';
 import { useTheme, ACCENTS, FONT_SCALES } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { parseDateFromDay } from '../dateUtils';
+import { supabase } from '../supabase';
 
 const movements = [
   { key: 'cj', name: 'C&J', color: '#e63946' },
@@ -38,7 +39,7 @@ function getProgramInfo(plan) {
 }
 
 export default function ProfileScreen() {
-  const { rms, resultados } = useApp();
+  const { rms, resultados, userProfile, logout } = useApp();
   const t = useTheme();
   const { activeProgram } = useProgram();
   const plan = activeProgram;
@@ -69,21 +70,30 @@ export default function ProfileScreen() {
   useEffect(() => {
     const load = async () => {
       try {
-        const n = await AsyncStorage.getItem('user_nombre');
-        const g = await AsyncStorage.getItem('user_genero');
         const f = await AsyncStorage.getItem('user_foto');
-        if (n) setNombre(n);
-        if (g) setGenero(g);
         if (f) setFoto(f);
+        // Supabase como fuente principal, AsyncStorage como fallback
+        if (userProfile?.nombre) {
+          setNombre(userProfile.nombre);
+        } else {
+          const n = await AsyncStorage.getItem('user_nombre');
+          if (n) setNombre(n);
+        }
+        const g = await AsyncStorage.getItem('user_genero');
+        if (g) setGenero(g);
       } catch (e) {}
     };
     load();
-  }, []);
+  }, [userProfile]);
 
   const guardarPerfil = async () => {
     try {
       await AsyncStorage.setItem('user_nombre', nombre);
       await AsyncStorage.setItem('user_genero', genero);
+      // Sincronizar nombre con Supabase
+      if (userProfile?.id) {
+        await supabase.from('usuarios').update({ nombre }).eq('id', userProfile.id);
+      }
       setEditando(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -310,7 +320,7 @@ export default function ProfileScreen() {
 
         {/* PROGRAMA ACTIVO */}
         <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>PROGRAMA ACTIVO</Text>
-        <View style={{ backgroundColor: t.accent + '10', borderWidth: 1, borderColor: t.accent + '35', borderRadius: 12, padding: 14 }}>
+        <View style={{ backgroundColor: t.accent + '10', borderWidth: 1, borderColor: t.accent + '35', borderRadius: 12, padding: 14, marginBottom: 24 }}>
           <Text style={{ fontSize: t.fs(9), color: t.accent, letterSpacing: 2, fontWeight: '700', marginBottom: 4 }}>ACTIVO</Text>
           <Text style={{ fontSize: t.fs(18), fontWeight: '900', color: t.text, marginBottom: 4 }}>
             {programInfo.title}
@@ -318,6 +328,18 @@ export default function ProfileScreen() {
           <Text style={{ fontSize: t.fs(11), color: t.text2 }}>{programInfo.range} · En pareja</Text>
           <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 2 }}>{programInfo.subtitle}</Text>
         </View>
+
+        {/* CERRAR SESIÓN */}
+        <TouchableOpacity
+          onPress={logout}
+          style={{ borderWidth: 1, borderColor: '#e63946' + '60', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 8 }}>
+          <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: '#e63946', letterSpacing: 1 }}>
+            CERRAR SESIÓN
+          </Text>
+        </TouchableOpacity>
+        <Text style={{ fontSize: t.fs(10), color: t.text3, textAlign: 'center', marginBottom: 20 }}>
+          {userProfile?.email || ''}
+        </Text>
 
       </ScrollView>
     </View>

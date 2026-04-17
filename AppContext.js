@@ -44,15 +44,49 @@ export function AppProvider({ children }) {
       }
       if (!uid) { setLoadingProfile(false); return; }
 
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('usuarios_publicos')
         .select('*')
         .eq('id', uid)
         .single();
-
       if (data) setUserProfile(data);
+
+      // Cargar RMs desde Supabase (fuente de verdad)
+      const { data: rmsData } = await supabase
+        .from('rms')
+        .select('movimiento, peso')
+        .eq('user_id', uid);
+      if (rmsData?.length) {
+        const rmsMap = {};
+        rmsData.forEach(r => { rmsMap[r.movimiento] = String(r.peso); });
+        setRms(prev => ({ ...prev, ...rmsMap }));
+        await AsyncStorage.setItem('user_rms', JSON.stringify({ ...rmsMap }));
+      }
+
+      // Cargar resultados desde Supabase (fuente de verdad)
+      const { data: resData } = await supabase
+        .from('resultados')
+        .select('dia, resultado, notas, fecha')
+        .eq('user_id', uid);
+      if (resData?.length) {
+        const resMap = {};
+        resData.forEach(r => { resMap[r.dia] = { resultado: r.resultado, notas: r.notas, fecha: r.fecha }; });
+        setResultados(prev => ({ ...prev, ...resMap }));
+        await AsyncStorage.setItem('user_resultados', JSON.stringify({ ...resMap }));
+      }
     } catch (e) {}
     finally { setLoadingProfile(false); }
+  };
+
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setRms({});
+      setResultados({});
+      setWodsLibres([]);
+      setUserProfile(null);
+      await AsyncStorage.multiRemove(['user_rms', 'user_resultados', 'user_wods_libres', 'user_nombre', 'user_foto', 'user_genero']);
+    } catch (e) {}
   };
 
   const saveRM = async (key, val) => {
@@ -159,6 +193,7 @@ export function AppProvider({ children }) {
       wodsLibres, saveWodLibre, deleteWodLibre,
       userProfile, loadingProfile, loadUserProfile,
       isAdmin, isCoach, isAtleta,
+      logout,
     }}>
       {children}
     </AppContext.Provider>
