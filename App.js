@@ -16,6 +16,8 @@ import ProfileScreen from './screens/ProfileScreen';
 import HistorialScreen from './screens/HistorialScreen';
 import SocialScreen from './screens/SocialScreen';
 import AuthScreen from './screens/AuthScreen';
+import OnboardingScreen from './screens/OnboardingScreen';
+import { useApp } from './AppContext';
 
 const SCREENS = {
   PROGRAM: HomeScreen,
@@ -43,6 +45,7 @@ function AppInner() {
   const [loading, setLoading] = useState(true);
   const Screen = SCREENS[active];
   const t = useTheme();
+  const { userProfile, loadingProfile } = useApp();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -55,7 +58,7 @@ function AppInner() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (loading) {
+  if (loading || (session && loadingProfile)) {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={t.accent} size="large" />
@@ -66,6 +69,10 @@ function AppInner() {
 
   if (!session) {
     return <AuthScreen onAuth={() => {}} />;
+  }
+
+  if (userProfile && !userProfile.onboarding_completed) {
+    return <OnboardingScreen onComplete={() => {}} />;
   }
   return (
     <SocialProvider>
