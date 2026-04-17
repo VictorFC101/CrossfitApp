@@ -131,6 +131,10 @@ export default function RMScreen() {
   const [saved, setSaved]         = useState(null);
   const [historial, setHistorial] = useState({});  // { [key]: [{peso, fecha}] }
   const [loadingH, setLoadingH]   = useState(null);
+  // Calculadora 1RM
+  const [showCalc, setShowCalc]   = useState(false);
+  const [calcPeso, setCalcPeso]   = useState('');
+  const [calcReps, setCalcReps]   = useState('');
 
   const category    = RM_CATEGORIES[activeCategory];
   const accentColor = category.color;
@@ -165,6 +169,13 @@ export default function RMScreen() {
     setHistorial(prev => { const next = { ...prev }; delete next[key]; return next; });
     setTimeout(() => setSaved(null), 2000);
   };
+
+  // Resetear calculadora al cambiar movimiento
+  useEffect(() => {
+    setShowCalc(false);
+    setCalcPeso('');
+    setCalcReps('');
+  }, [expanded]);
 
   const handleTabChange = (name) => {
     setActiveCategory(name);
@@ -285,6 +296,103 @@ export default function RMScreen() {
                     <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: 6 }}>
                       Se actualiza en el WOD automáticamente
                     </Text>
+                  </View>
+
+                  {/* ── CALCULADORA 1RM ── */}
+                  <View style={{ borderTopWidth: 1, borderTopColor: t.border, paddingTop: 14, marginBottom: 14 }}>
+                    <TouchableOpacity
+                      onPress={() => setShowCalc(s => !s)}
+                      style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ fontSize: t.fs(10), color: accentColor, letterSpacing: 2, fontWeight: '700' }}>
+                        🧮 CALCULAR 1RM ESTIMADO
+                      </Text>
+                      <Text style={{ fontSize: t.fs(16), color: accentColor }}>{showCalc ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+
+                    {showCalc && (() => {
+                      const p = parseFloat(calcPeso);
+                      const r = parseInt(calcReps);
+                      const validP = p > 0;
+                      const validR = r >= 1 && r <= 30;
+                      const estimated = validP && validR
+                        ? Math.round(p * (1 + r / 30))
+                        : null;
+                      const warning = r > 12
+                        ? 'Con más de 12 reps la estimación es menos precisa'
+                        : r === 1 ? 'Con 1 rep ya tienes tu 1RM directo' : null;
+
+                      return (
+                        <View style={{ marginTop: 12 }}>
+                          <Text style={{ fontSize: t.fs(10), color: t.text3, marginBottom: 10 }}>
+                            Fórmula Epley: 1RM = peso × (1 + reps / 30)
+                          </Text>
+
+                          {/* Inputs */}
+                          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: t.fs(9), color: t.text3, letterSpacing: 1, marginBottom: 4 }}>PESO (KG)</Text>
+                              <TextInput
+                                value={calcPeso}
+                                onChangeText={setCalcPeso}
+                                keyboardType="numeric"
+                                placeholder="ej: 80"
+                                placeholderTextColor={t.text3}
+                                style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: accentColor + '40', borderRadius: 8, color: t.text, fontSize: t.fs(18), fontWeight: '700', padding: 10, textAlign: 'center' }}
+                              />
+                            </View>
+                            <View style={{ justifyContent: 'flex-end', paddingBottom: 10 }}>
+                              <Text style={{ fontSize: t.fs(18), color: t.text3, fontWeight: '700' }}>×</Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: t.fs(9), color: t.text3, letterSpacing: 1, marginBottom: 4 }}>REPS</Text>
+                              <TextInput
+                                value={calcReps}
+                                onChangeText={setCalcReps}
+                                keyboardType="numeric"
+                                placeholder="ej: 5"
+                                placeholderTextColor={t.text3}
+                                style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: accentColor + '40', borderRadius: 8, color: t.text, fontSize: t.fs(18), fontWeight: '700', padding: 10, textAlign: 'center' }}
+                              />
+                            </View>
+                          </View>
+
+                          {/* Warning */}
+                          {warning && (
+                            <Text style={{ fontSize: t.fs(10), color: '#f4a261', marginBottom: 8 }}>
+                              ⚠️ {warning}
+                            </Text>
+                          )}
+
+                          {/* Resultado */}
+                          {estimated ? (
+                            <View style={{ backgroundColor: accentColor + '12', borderWidth: 1, borderColor: accentColor + '40', borderRadius: 10, padding: 14, alignItems: 'center', marginBottom: 10 }}>
+                              <Text style={{ fontSize: t.fs(10), color: accentColor, letterSpacing: 2, fontWeight: '700', marginBottom: 4 }}>
+                                1RM ESTIMADO
+                              </Text>
+                              <Text style={{ fontSize: t.fs(42), fontWeight: '900', color: accentColor }}>
+                                {estimated}<Text style={{ fontSize: t.fs(16), color: t.text2 }}> kg</Text>
+                              </Text>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  handleSave(mv.key, String(estimated));
+                                  setShowCalc(false);
+                                }}
+                                style={{ marginTop: 10, backgroundColor: accentColor, borderRadius: 8, paddingHorizontal: 20, paddingVertical: 10 }}>
+                                <Text style={{ fontSize: t.fs(12), fontWeight: '900', color: '#fff', letterSpacing: 1 }}>
+                                  USAR COMO 1RM →
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            <View style={{ backgroundColor: t.bg4, borderRadius: 8, padding: 12, alignItems: 'center' }}>
+                              <Text style={{ fontSize: t.fs(12), color: t.text3 }}>
+                                Introduce peso y reps para calcular
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })()}
                   </View>
 
                   {hasRM && (
