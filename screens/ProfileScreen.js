@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from 'react';
 import AdminScreen from './AdminScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
 import { useApp } from '../AppContext';
 import { useTheme, ACCENTS, FONT_SCALES } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
@@ -39,7 +41,7 @@ function getProgramInfo(plan) {
 }
 
 export default function ProfileScreen() {
-  const { rms, resultados, userProfile, logout } = useApp();
+  const { rms, resultados, userProfile, logout, loadUserProfile } = useApp();
   const t = useTheme();
   const { activeProgram } = useProgram();
   const plan = activeProgram;
@@ -115,27 +117,30 @@ export default function ProfileScreen() {
     if (!result.canceled) {
       const uri = result.assets[0].uri;
       setFoto(uri); // preview inmediato
+      await AsyncStorage.setItem('user_foto', uri); // fallback garantizado
+      if (!userProfile?.id) return;
       try {
-        if (!userProfile?.id) return;
-        // Leer el archivo como ArrayBuffer
-        const response = await fetch(uri);
-        const blob = await response.blob();
         const path = `${userProfile.id}/avatar.jpg`;
+        // Leer como base64 y convertir a ArrayBuffer (método fiable en React Native)
+        const base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const arrayBuffer = decode(base64);
         // Subir a Supabase Storage
         const { error: uploadError } = await supabase.storage
           .from('avatars')
-          .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+          .upload(path, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
         if (uploadError) throw uploadError;
-        // Obtener URL pública
+        // Obtener URL pública y guardar en tabla usuarios
         const { data: { publicUrl } } = supabase.storage
           .from('avatars')
           .getPublicUrl(path);
-        // Guardar URL en tabla usuarios
         await supabase.from('usuarios').update({ avatar_url: publicUrl }).eq('id', userProfile.id);
         setFoto(publicUrl);
+        // Refrescar userProfile en memoria para que avatar_url esté disponible
+        await loadUserProfile(userProfile.id);
       } catch (e) {
-        // Si falla el upload, mantener URI local como fallback
-        await AsyncStorage.setItem('user_foto', uri);
+        // Upload falló — URI local ya está guardado en AsyncStorage como fallback
       }
     }
   };
