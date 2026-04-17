@@ -24,7 +24,7 @@ export default function WodScreen({ navigate }) {
       setResultado(resultados[day.day].resultado || '');
       setNotas(resultados[day.day].notas || '');
     }
-  }, []);
+  }, [day?.day]);
 
   const guardar = async () => {
     if (!day) return;
