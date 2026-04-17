@@ -70,9 +70,14 @@ export default function ProfileScreen() {
   useEffect(() => {
     const load = async () => {
       try {
-        const f = await AsyncStorage.getItem('user_foto');
-        if (f) setFoto(f);
-        // Supabase como fuente principal, AsyncStorage como fallback
+        // Foto: Supabase Storage como fuente principal, URI local como fallback
+        if (userProfile?.avatar_url) {
+          setFoto(userProfile.avatar_url);
+        } else {
+          const f = await AsyncStorage.getItem('user_foto');
+          if (f) setFoto(f);
+        }
+        // Nombre: Supabase como fuente principal, AsyncStorage como fallback
         if (userProfile?.nombre) {
           setNombre(userProfile.nombre);
         } else {
@@ -109,8 +114,29 @@ export default function ProfileScreen() {
     });
     if (!result.canceled) {
       const uri = result.assets[0].uri;
-      setFoto(uri);
-      await AsyncStorage.setItem('user_foto', uri);
+      setFoto(uri); // preview inmediato
+      try {
+        if (!userProfile?.id) return;
+        // Leer el archivo como ArrayBuffer
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const path = `${userProfile.id}/avatar.jpg`;
+        // Subir a Supabase Storage
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+        if (uploadError) throw uploadError;
+        // Obtener URL pública
+        const { data: { publicUrl } } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(path);
+        // Guardar URL en tabla usuarios
+        await supabase.from('usuarios').update({ avatar_url: publicUrl }).eq('id', userProfile.id);
+        setFoto(publicUrl);
+      } catch (e) {
+        // Si falla el upload, mantener URI local como fallback
+        await AsyncStorage.setItem('user_foto', uri);
+      }
     }
   };
 

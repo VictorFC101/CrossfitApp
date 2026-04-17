@@ -85,7 +85,7 @@ export function AppProvider({ children }) {
       setResultados({});
       setWodsLibres([]);
       setUserProfile(null);
-      await AsyncStorage.multiRemove(['user_rms', 'user_resultados', 'user_wods_libres', 'user_nombre', 'user_foto', 'user_genero']);
+      await AsyncStorage.multiRemove(['user_rms', 'user_resultados', 'user_wods_libres', 'user_nombre', 'user_genero']);
     } catch (e) {}
   };
 
