@@ -49,7 +49,15 @@ export function AppProvider({ children }) {
         .select('*')
         .eq('id', uid)
         .single();
-      if (data) setUserProfile(data);
+
+      // Traer campos privados que la vista pública no expone
+      const { data: privateData } = await supabase
+        .from('usuarios')
+        .select('onboarding_completed, genero, push_token, box_id')
+        .eq('id', uid)
+        .single();
+
+      if (data) setUserProfile({ ...data, ...(privateData || {}) });
 
       // Cargar RMs desde Supabase (fuente de verdad)
       const { data: rmsData } = await supabase
