@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "crossfit-app",
-    "slug": "crossfit-app",
+    "name": "Wodly",
+    "slug": "wodly",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,14 +13,17 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.victor.wodly"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.victor.wodly",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"
