@@ -114,17 +114,26 @@ export function AppProvider({ children }) {
       // Sincronizar con Supabase
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        const pesoNum = parseFloat(val);
+        const fechaISO = new Date().toISOString();
         await supabase.from('rms').upsert({
           user_id: user.id,
           movimiento: key,
-          peso: parseFloat(val),
-          fecha: new Date().toISOString(),
+          peso: pesoNum,
+          fecha: fechaISO,
+        });
+        // Historial acumulativo (nunca se sobreescribe)
+        await supabase.from('rms_historial').insert({
+          user_id: user.id,
+          movimiento: key,
+          peso: pesoNum,
+          fecha: fechaISO,
         });
         // Feed social
         await supabase.from('feed_actividad').insert({
           user_id: user.id,
           tipo: 'rm_nuevo',
-          data: { movimiento: key, peso: parseFloat(val) },
+          data: { movimiento: key, peso: pesoNum },
         });
       }
     } catch (e) {}
