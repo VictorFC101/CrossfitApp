@@ -78,6 +78,15 @@ export function AppProvider({ children }) {
     finally { setLoadingProfile(false); }
   };
 
+  const completeOnboarding = async () => {
+    try {
+      if (userProfile?.id) {
+        await supabase.from('usuarios').update({ onboarding_completed: true }).eq('id', userProfile.id);
+        setUserProfile(prev => ({ ...prev, onboarding_completed: true }));
+      }
+    } catch (e) {}
+  };
+
   const logout = async () => {
     try {
       await supabase.auth.signOut();
@@ -193,7 +202,7 @@ export function AppProvider({ children }) {
       wodsLibres, saveWodLibre, deleteWodLibre,
       userProfile, loadingProfile, loadUserProfile,
       isAdmin, isCoach, isAtleta,
-      logout,
+      logout, completeOnboarding,
     }}>
       {children}
     </AppContext.Provider>
