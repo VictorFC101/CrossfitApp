@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useTheme } from '../ThemeContext';
 import { useSocial } from '../SocialContext';
 import { supabase } from '../supabase';
+import { RM_NAMES } from '../constants';
 
 function timeAgo(dateStr) {
   const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
@@ -38,10 +39,9 @@ function FeedItem({ item, t, TIPO_ICONS, TIPO_LABELS, getAmigoData, myUserId, on
           </View>
         );
       case 'rm_nuevo': {
-        const rmNames = { cj: 'Clean & Jerk', sn: 'Snatch', bs: 'Back Squat', dl: 'Deadlift', fs: 'Front Squat', sp: 'Strict Press' };
         return (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Text style={{ fontSize: t.fs(13), color: t.text2 }}>{rmNames[d.movimiento] || d.movimiento}</Text>
+            <Text style={{ fontSize: t.fs(13), color: t.text2 }}>{RM_NAMES[d.movimiento] || d.movimiento}</Text>
             <Text style={{ fontSize: t.fs(26), fontWeight: '900', color: t.accent }}>
               {d.peso}<Text style={{ fontSize: t.fs(13), fontWeight: '400' }}>kg</Text>
             </Text>

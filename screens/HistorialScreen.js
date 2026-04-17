@@ -5,8 +5,9 @@ import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { useSocial } from '../SocialContext';
 import { MOVEMENTS_DB, CATEGORIES, CATEGORY_COLORS } from '../movements_db';
+import { RM_NAMES, TYPE_COLORS as SHARED_TYPE_COLORS } from '../constants';
 
-const rmNames = { cj: 'C&J', sn: 'Snatch', bs: 'Back Squat', dl: 'Deadlift', fs: 'Front Squat', sp: 'Strict Press' };
+const rmNames = RM_NAMES;
 
 const WOD_TYPES = ['AMRAP', 'FOR TIME', 'EMOM', 'STRENGTH', 'LIBRE'];
 
@@ -288,7 +289,7 @@ export default function HistorialScreen() {
       )
     : [];
 
-  const typeColors = { Halterofilia: '#e63946', Fuerza: '#4895ef', Libre: '#f4a261', Gimnásticos: '#52b788' };
+  const typeColors = SHARED_TYPE_COLORS;
 
   const diasConResultado = allDays.filter(d => resultados[d.day]);
   const diasSinResultado = allDays.filter(d => !resultados[d.day] && d.type !== 'Libre');

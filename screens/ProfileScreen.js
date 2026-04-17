@@ -10,15 +10,9 @@ import { useTheme, ACCENTS, FONT_SCALES } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { parseDateFromDay } from '../dateUtils';
 import { supabase } from '../supabase';
+import { RM_MOVEMENTS } from '../constants';
 
-const movements = [
-  { key: 'cj', name: 'C&J', color: '#e63946' },
-  { key: 'sn', name: 'SNT', color: '#e63946' },
-  { key: 'bs', name: 'BSQ', color: '#4895ef' },
-  { key: 'dl', name: 'DL', color: '#4895ef' },
-  { key: 'fs', name: 'FSQ', color: '#4895ef' },
-  { key: 'sp', name: 'SP', color: '#52b788' },
-];
+const movements = RM_MOVEMENTS;
 
 function getProgramInfo(plan) {
   if (!plan) return { title: 'CROSSFIT', subtitle: '', range: '', weeks: 0 };
