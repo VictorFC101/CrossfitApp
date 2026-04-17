@@ -381,7 +381,7 @@ export default function SocialScreen() {
       }
       // Recargar feed para reflejar cambios
       await refreshFeed();
-    } catch (e) { console.log('handleReaction error:', e.message); }
+    } catch (e) { }
   };
 
   const handleComment = async () => {
@@ -395,7 +395,7 @@ export default function SocialScreen() {
         target_tipo: 'feed',
         texto: commentText.trim(),
       });
-      if (error) { console.log('COMENTARIO ERROR:', error.message); return; }
+      if (error) return;
       setCommentText('');
       setCommentTarget(null);
       await refreshFeed();
@@ -405,7 +405,7 @@ export default function SocialScreen() {
   const handleDeleteComment = async (commentId) => {
     try {
       const { error } = await supabase.from('comentarios').delete().eq('id', commentId);
-      if (error) { console.log('DELETE COMMENT ERROR:', error.message); return; }
+      if (error) return;
       await refreshFeed();
     } catch (e) {}
   };

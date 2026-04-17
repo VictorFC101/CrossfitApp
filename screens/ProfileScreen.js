@@ -60,7 +60,6 @@ export default function ProfileScreen() {
 
   const handleSecretTap = () => {
     tapCount.current += 1;
-    console.log('TAP COUNT:', tapCount.current);
     if (tapTimer.current) clearTimeout(tapTimer.current);
     tapTimer.current = setTimeout(() => { tapCount.current = 0; }, 2000);
     if (tapCount.current >= 5) {

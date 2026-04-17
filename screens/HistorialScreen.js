@@ -2,24 +2,11 @@ import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, FlatList } 
 import { useState } from 'react';
 import { useApp } from '../AppContext';
 import { useTheme } from '../ThemeContext';
-import { plan } from '../data';
+import { useProgram } from '../ProgramContext';
+import { useSocial } from '../SocialContext';
 import { MOVEMENTS_DB, CATEGORIES, CATEGORY_COLORS } from '../movements_db';
 
-const allDays = plan.weeks.flatMap((w, wi) =>
-  w.days.map((d, di) => ({ ...d, weekIndex: wi, dayIndex: di, weekNumber: w.number }))
-);
-
 const rmNames = { cj: 'C&J', sn: 'Snatch', bs: 'Back Squat', dl: 'Deadlift', fs: 'Front Squat', sp: 'Strict Press' };
-
-const companerosMock = {
-  'Lunes 30 Mar': [
-    { nombre: 'Marc G.', resultado: '9+2', notas: 'Muy bien el C&J hoy' },
-    { nombre: 'Anna N.', resultado: '11 rds', notas: 'PR en C&J 78kg 🏅' },
-  ],
-  'Miércoles 1 Abr': [
-    { nombre: 'Jordi T.', resultado: '24:15', notas: 'C2B muy pesado al final' },
-  ],
-};
 
 const WOD_TYPES = ['AMRAP', 'FOR TIME', 'EMOM', 'STRENGTH', 'LIBRE'];
 
@@ -289,14 +276,36 @@ function WodCreator({ visible, onClose, onSave }) {
 export default function HistorialScreen() {
   const { resultados, rms, saveResultado, wodsLibres, saveWodLibre, deleteWodLibre } = useApp();
   const t = useTheme();
+  const { activeProgram } = useProgram();
+  const { feed, esAmigo } = useSocial();
   const [expanded, setExpanded] = useState(null);
   const [tab, setTab] = useState('yo');
   const [showCreator, setShowCreator] = useState(false);
-  
+
+  const allDays = activeProgram
+    ? activeProgram.weeks.flatMap((w, wi) =>
+        w.days.map((d, di) => ({ ...d, weekIndex: wi, dayIndex: di, weekNumber: w.number }))
+      )
+    : [];
+
+  const typeColors = { Halterofilia: '#e63946', Fuerza: '#4895ef', Libre: '#f4a261', Gimnásticos: '#52b788' };
 
   const diasConResultado = allDays.filter(d => resultados[d.day]);
   const diasSinResultado = allDays.filter(d => !resultados[d.day] && d.type !== 'Libre');
-  const typeColors = { Halterofilia: '#e63946', Fuerza: '#4895ef', Libre: '#f4a261', Gimnásticos: '#52b788' };
+
+  // Resultados de amigos agrupados por día (desde feed real)
+  const companerosPorDia = {};
+  feed
+    .filter(f => f.tipo === 'wod_completado' && esAmigo(f.user_id) && f.data?.dia)
+    .forEach(f => {
+      const dia = f.data.dia;
+      if (!companerosPorDia[dia]) companerosPorDia[dia] = [];
+      companerosPorDia[dia].push({
+        nombre: f.user_nombre || 'Atleta',
+        resultado: f.data.resultado || '—',
+        notas: f.data.notas || '',
+      });
+    });
 
   const handleSaveWodLibre = (wod) => {
   saveWodLibre(wod);
@@ -354,7 +363,7 @@ export default function HistorialScreen() {
               const accent = typeColors[day.type] || t.accent;
               const rmKey = day.rmKey;
               const rmVal = rms[rmKey];
-              const companeros = companerosMock[day.day] || [];
+              const companeros = companerosPorDia[day.day] || [];
 
               return (
                 <TouchableOpacity key={i} onPress={() => setExpanded(isOpen ? null : day.day)}
@@ -546,38 +555,44 @@ export default function HistorialScreen() {
         {/* COMPAÑEROS */}
         {tab === 'companeros' && (
           <View style={{ marginTop: 8 }}>
-            {Object.keys(companerosMock).map((dia, i) => {
-              const dayData = allDays.find(d => d.day === dia);
-              const accent = dayData ? typeColors[dayData.type] || t.accent : t.accent;
-              return (
-                <View key={i} style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
-                  <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: t.border, backgroundColor: accent + '10' }}>
-                    <Text style={{ fontSize: t.fs(12), fontWeight: '900', color: accent }}>{dia}</Text>
-                    <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: 2 }}>{dayData?.label}</Text>
-                  </View>
-                  {companerosMock[dia].map((c, j) => (
-                    <View key={j} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderBottomWidth: j < companerosMock[dia].length - 1 ? 1 : 0, borderBottomColor: t.border }}>
-                      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: t.accent + '20', alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.accent }}>{c.nombre.split(' ').map(p => p[0]).join('')}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{c.nombre}</Text>
-                        {c.notas ? <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 2 }}>{c.notas}</Text> : null}
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={{ fontSize: t.fs(16), fontWeight: '900', color: accent }}>{c.resultado}</Text>
-                        <Text style={{ fontSize: t.fs(9), color: t.text3 }}>RESULTADO</Text>
-                      </View>
+            {Object.keys(companerosPorDia).length === 0 ? (
+              <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 24, alignItems: 'center', marginTop: 20 }}>
+                <Text style={{ fontSize: t.fs(32), marginBottom: 12 }}>👥</Text>
+                <Text style={{ fontSize: t.fs(16), fontWeight: '900', color: t.text, marginBottom: 6 }}>Sin resultados de compañeros</Text>
+                <Text style={{ fontSize: t.fs(12), color: t.text3, textAlign: 'center', lineHeight: t.fs(18) }}>
+                  Aquí aparecerán los resultados de tus amigos cuando completen WODs del mismo programa
+                </Text>
+              </View>
+            ) : (
+              Object.keys(companerosPorDia).map((dia, i) => {
+                const dayData = allDays.find(d => d.day === dia);
+                const accent = dayData ? typeColors[dayData.type] || t.accent : t.accent;
+                const lista = companerosPorDia[dia];
+                return (
+                  <View key={i} style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
+                    <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: t.border, backgroundColor: accent + '10' }}>
+                      <Text style={{ fontSize: t.fs(12), fontWeight: '900', color: accent }}>{dia}</Text>
+                      <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: 2 }}>{dayData?.label}</Text>
                     </View>
-                  ))}
-                </View>
-              );
-            })}
-            <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 20, alignItems: 'center', marginTop: 8 }}>
-              <Text style={{ fontSize: t.fs(13), color: t.text3, textAlign: 'center', lineHeight: t.fs(20) }}>
-                Los resultados de compañeros en tiempo real estarán disponibles cuando añadamos el backend social 🚀
-              </Text>
-            </View>
+                    {lista.map((c, j) => (
+                      <View key={j} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderBottomWidth: j < lista.length - 1 ? 1 : 0, borderBottomColor: t.border }}>
+                        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: t.accent + '20', alignItems: 'center', justifyContent: 'center' }}>
+                          <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.accent }}>{c.nombre.split(' ').map(p => p[0]).join('')}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{c.nombre}</Text>
+                          {c.notas ? <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 2 }}>{c.notas}</Text> : null}
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ fontSize: t.fs(16), fontWeight: '900', color: accent }}>{c.resultado}</Text>
+                          <Text style={{ fontSize: t.fs(9), color: t.text3 }}>RESULTADO</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                );
+              })
+            )}
           </View>
         )}
 
