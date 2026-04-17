@@ -109,13 +109,40 @@ export function SocialProvider({ children }) {
       });
       if (error) throw error;
       setSolicitudesEnviadas(prev => [...prev, friendId]);
+
+      // Notificación in-app
       await supabase.from('notificaciones').insert({
         user_id: friendId,
         tipo: 'solicitud_amistad',
         titulo: '👋 Nueva solicitud de amistad',
-        mensaje: 'Alguien quiere conectar contigo',
+        mensaje: 'Alguien quiere conectar contigo en Wodly',
         data: { from_user_id: myUserId },
       });
+
+      // Push notification al receptor
+      const { data: receptor } = await supabase
+        .from('usuarios')
+        .select('push_token, nombre')
+        .eq('id', myUserId)
+        .single();
+      const { data: destinatario } = await supabase
+        .from('usuarios')
+        .select('push_token')
+        .eq('id', friendId)
+        .single();
+      if (destinatario?.push_token) {
+        await fetch('https://exp.host/--/api/v2/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: destinatario.push_token,
+            title: '👋 Nueva solicitud de amistad',
+            body: `${receptor?.nombre || 'Alguien'} quiere conectar contigo en Wodly`,
+            data: { type: 'friend_request', from: myUserId },
+          }),
+        });
+      }
+
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message };
