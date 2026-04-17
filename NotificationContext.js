@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
@@ -55,13 +56,22 @@ export function NotificationProvider({ children }) {
       }
       if (finalStatus !== 'granted') return;
 
-      const tokenData = await Notifications.getExpoPushTokenAsync();
-      const token = tokenData.data;
-      setPushToken(token);
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('usuarios').update({ push_token: token }).eq('id', user.id);
+      // SDK 50+: projectId requerido para getExpoPushTokenAsync
+      try {
+        const projectId =
+          Constants.expoConfig?.extra?.eas?.projectId ??
+          Constants.easConfig?.projectId;
+        const tokenData = await Notifications.getExpoPushTokenAsync(
+          projectId ? { projectId } : undefined
+        );
+        const token = tokenData.data;
+        setPushToken(token);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from('usuarios').update({ push_token: token }).eq('id', user.id);
+        }
+      } catch (_) {
+        // Push token no disponible en este entorno (simulador, etc.) — no bloqueante
       }
     } catch (e) {}
   };
@@ -77,7 +87,16 @@ export function NotificationProvider({ children }) {
 
   const scheduleWodReminder = async (hour) => {
     try {
+      // Verificar permisos antes de intentar programar
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') {
+        const { status: newStatus } = await Notifications.requestPermissionsAsync();
+        if (newStatus !== 'granted') return;
+      }
+
       await Notifications.cancelScheduledNotificationAsync(REMINDER_ID).catch(() => {});
+
+      // SDK 50+: usar SchedulableTriggerInputTypes en lugar del objeto plano
       await Notifications.scheduleNotificationAsync({
         identifier: REMINDER_ID,
         content: {
@@ -85,8 +104,13 @@ export function NotificationProvider({ children }) {
           body: 'Tu entrenamiento de hoy te está esperando. ¡Vamos!',
           sound: true,
         },
-        trigger: { hour, minute: 0, repeats: true },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour,
+          minute: 0,
+        },
       });
+
       setReminderEnabled(true);
       setReminderHour(hour);
       await AsyncStorage.setItem('@crossfit_reminder_enabled', 'true');
