@@ -1,21 +1,23 @@
 import { View, Text, ScrollView, TextInput, TouchableOpacity } from 'react-native';
 import { useState, useEffect } from 'react';
-import { plan } from '../data';
 import { useApp } from '../AppContext';
 import { useTheme } from '../ThemeContext';
+import { useProgram } from '../ProgramContext';
 import { getTodayDay, isTodayInProgram, formatDateShort, getToday } from '../dateUtils';
-
-const allDaysFlat = plan.weeks.flatMap(w => w.days);
 
 export default function WodScreen({ navigate }) {
   const { rms, resultados, saveResultado } = useApp();
   const t = useTheme();
+  const { activeProgram } = useProgram();
   const [resultado, setResultado] = useState('');
   const [notas, setNotas] = useState('');
   const [saved, setSaved] = useState(false);
 
-  const todayInProgram = isTodayInProgram(allDaysFlat);
-  const day = getTodayDay(allDaysFlat);
+  const allDaysFlat = activeProgram
+    ? activeProgram.weeks.flatMap(w => w.days)
+    : [];
+  const todayInProgram = allDaysFlat.length > 0 && isTodayInProgram(allDaysFlat);
+  const day = allDaysFlat.length > 0 ? getTodayDay(allDaysFlat) : null;
 
   useEffect(() => {
     if (day && resultados[day.day]) {

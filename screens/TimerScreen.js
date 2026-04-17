@@ -1,9 +1,23 @@
 import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../ThemeContext';
+import { useProgram } from '../ProgramContext';
+import { getInitialIdx, isTodayInProgram } from '../dateUtils';
 
 export default function TimerScreen() {
   const t = useTheme();
+  const { activeProgram } = useProgram();
+
+  // Calcular WOD del día real desde el programa activo
+  const allDays = activeProgram
+    ? activeProgram.weeks.flatMap((w, wi) =>
+        w.days.map((d, di) => ({ ...d, weekIndex: wi, dayIndex: di }))
+      )
+    : [];
+  const todayInProgram = allDays.length > 0 && isTodayInProgram(allDays);
+  const todayIdx = todayInProgram ? getInitialIdx(allDays) : -1;
+  const todayDay = todayIdx >= 0 ? allDays[todayIdx] : null;
+  const wodMovements = todayDay?.wod?.movements?.filter(m => m.name !== '—') || [];
   const [mode, setMode] = useState('AMRAP');
   const [customMins, setCustomMins] = useState('20');
   const [emomMins, setEmomMins] = useState('1');
@@ -199,21 +213,44 @@ export default function TimerScreen() {
         )}
 
         <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 14, width: '100%' }}>
-          <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, marginBottom: 10 }}>WOD HOY</Text>
-          {[
-            { reps: '4', name: 'Clean & Jerk', weight: '♂ 60kg / ♀ 40kg' },
-            { reps: '4', name: 'S2OH', weight: '♂ 60kg / ♀ 40kg' },
-            { reps: '10', name: 'TTB', weight: 'BW' },
-            { reps: '15', name: 'Cal Ski Erg', weight: 'alternos' },
-          ].map((m, i) => (
-            <View key={i} style={{ flexDirection: 'row', gap: 10, borderLeftWidth: 3, borderLeftColor: accentColor, padding: 8, marginBottom: 6, backgroundColor: t.bg4, borderRadius: 6 }}>
-              <Text style={{ minWidth: 30, fontSize: t.fs(13), fontWeight: '700', color: accentColor }}>{m.reps}</Text>
-              <View>
-                <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{m.name}</Text>
-                <Text style={{ fontSize: t.fs(10), color: t.text2, marginTop: 1 }}>{m.weight}</Text>
-              </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2 }}>WOD HOY</Text>
+            {todayDay && (
+              <Text style={{ fontSize: t.fs(9), color: accentColor, fontWeight: '700', letterSpacing: 1 }}>
+                {todayDay.wod?.type} · {todayDay.wod?.duration}
+              </Text>
+            )}
+          </View>
+          {!activeProgram || allDays.length === 0 ? (
+            <Text style={{ fontSize: t.fs(12), color: t.text3, textAlign: 'center', paddingVertical: 8 }}>
+              Cargando programa...
+            </Text>
+          ) : !todayInProgram || !todayDay ? (
+            <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+              <Text style={{ fontSize: t.fs(20), marginBottom: 6 }}>🕊️</Text>
+              <Text style={{ fontSize: t.fs(12), color: t.text3, textAlign: 'center' }}>
+                Sin WOD programado hoy
+              </Text>
             </View>
-          ))}
+          ) : wodMovements.length === 0 ? (
+            <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+              <Text style={{ fontSize: t.fs(12), color: t.text3, textAlign: 'center' }}>
+                {todayDay.type === 'Libre' ? '🕊️ Sesión libre' : 'Sin movimientos definidos'}
+              </Text>
+            </View>
+          ) : (
+            wodMovements.map((m, i) => (
+              <View key={i} style={{ flexDirection: 'row', gap: 10, borderLeftWidth: 3, borderLeftColor: accentColor, padding: 8, marginBottom: 6, backgroundColor: t.bg4, borderRadius: 6 }}>
+                <Text style={{ minWidth: 30, fontSize: t.fs(13), fontWeight: '700', color: accentColor }}>{m.reps}</Text>
+                <View>
+                  <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{m.name}</Text>
+                  {m.weight && m.weight !== 'BW' && (
+                    <Text style={{ fontSize: t.fs(10), color: t.text2, marginTop: 1 }}>{m.weight}</Text>
+                  )}
+                </View>
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
     </View>
