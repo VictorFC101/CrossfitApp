@@ -8,6 +8,7 @@ import { decode } from 'base64-arraybuffer';
 import { useApp } from '../AppContext';
 import { useTheme, ACCENTS, FONT_SCALES } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
+import { useNotifications, REMINDER_HOURS } from '../NotificationContext';
 import { parseDateFromDay } from '../dateUtils';
 import { supabase } from '../supabase';
 import { RM_MOVEMENTS } from '../constants';
@@ -37,6 +38,7 @@ function getProgramInfo(plan) {
 export default function ProfileScreen() {
   const { rms, resultados, userProfile, logout, loadUserProfile } = useApp();
   const t = useTheme();
+  const { reminderEnabled, reminderHour, scheduleWodReminder, cancelWodReminder } = useNotifications();
   const { activeProgram } = useProgram();
   const plan = activeProgram;
   const [nombre, setNombre] = useState('');
@@ -351,6 +353,41 @@ export default function ProfileScreen() {
           </Text>
           <Text style={{ fontSize: t.fs(11), color: t.text2 }}>{programInfo.range} · En pareja</Text>
           <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 2 }}>{programInfo.subtitle}</Text>
+        </View>
+
+        {/* NOTIFICACIONES */}
+        <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>🔔 NOTIFICACIONES</Text>
+        <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 14, marginBottom: 24 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: reminderEnabled ? 14 : 0 }}>
+            <View>
+              <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>Recordatorio WOD diario</Text>
+              <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 2 }}>
+                {reminderEnabled ? `Activo · ${reminderHour}:00h` : 'Desactivado'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => reminderEnabled ? cancelWodReminder() : scheduleWodReminder(reminderHour)}
+              style={{ backgroundColor: reminderEnabled ? t.accent + '20' : t.bg4, borderWidth: 2, borderColor: reminderEnabled ? t.accent : t.border, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 }}>
+              <Text style={{ fontSize: t.fs(11), fontWeight: '900', color: reminderEnabled ? t.accent : t.text3 }}>
+                {reminderEnabled ? 'ON' : 'OFF'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {reminderEnabled && (
+            <View>
+              <Text style={{ fontSize: t.fs(9), color: t.text3, letterSpacing: 1, marginBottom: 8 }}>HORA DEL RECORDATORIO</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {REMINDER_HOURS.map(h => (
+                    <TouchableOpacity key={h} onPress={() => scheduleWodReminder(h)}
+                      style={{ paddingHorizontal: 14, paddingVertical: 8, backgroundColor: reminderHour === h ? t.accent + '20' : t.bg4, borderWidth: 1, borderColor: reminderHour === h ? t.accent : t.border, borderRadius: 8 }}>
+                      <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: reminderHour === h ? t.accent : t.text2 }}>{h}:00</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+          )}
         </View>
 
         {/* CERRAR SESIÓN */}

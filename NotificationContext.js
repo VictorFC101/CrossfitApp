@@ -1,15 +1,34 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
 const NotificationContext = createContext();
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
+const REMINDER_ID = 'wod-daily-reminder';
+export const REMINDER_HOURS = [6, 7, 8, 9, 17, 18, 19];
 
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [pendingProgram, setPendingProgram] = useState(null);
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderHour, setReminderHour] = useState(7);
+  const [pushToken, setPushToken] = useState(null);
 
   useEffect(() => {
-    loadNotifications();
+    registerForPushNotifications();
+    loadReminderSettings();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         loadNotifications(session.user.id);
@@ -18,6 +37,70 @@ export function NotificationProvider({ children }) {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  const registerForPushNotifications = async () => {
+    try {
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Wodly',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+        });
+      }
+      const { status: existing } = await Notifications.getPermissionsAsync();
+      let finalStatus = existing;
+      if (existing !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') return;
+
+      const tokenData = await Notifications.getExpoPushTokenAsync();
+      const token = tokenData.data;
+      setPushToken(token);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('usuarios').update({ push_token: token }).eq('id', user.id);
+      }
+    } catch (e) {}
+  };
+
+  const loadReminderSettings = async () => {
+    try {
+      const enabled = await AsyncStorage.getItem('@crossfit_reminder_enabled');
+      const hour = await AsyncStorage.getItem('@crossfit_reminder_hour');
+      if (enabled === 'true') setReminderEnabled(true);
+      if (hour) setReminderHour(parseInt(hour));
+    } catch (e) {}
+  };
+
+  const scheduleWodReminder = async (hour) => {
+    try {
+      await Notifications.cancelScheduledNotificationAsync(REMINDER_ID).catch(() => {});
+      await Notifications.scheduleNotificationAsync({
+        identifier: REMINDER_ID,
+        content: {
+          title: '⚡ WOD del día',
+          body: 'Tu entrenamiento de hoy te está esperando. ¡Vamos!',
+          sound: true,
+        },
+        trigger: { hour, minute: 0, repeats: true },
+      });
+      setReminderEnabled(true);
+      setReminderHour(hour);
+      await AsyncStorage.setItem('@crossfit_reminder_enabled', 'true');
+      await AsyncStorage.setItem('@crossfit_reminder_hour', String(hour));
+    } catch (e) {}
+  };
+
+  const cancelWodReminder = async () => {
+    try {
+      await Notifications.cancelScheduledNotificationAsync(REMINDER_ID).catch(() => {});
+      setReminderEnabled(false);
+      await AsyncStorage.setItem('@crossfit_reminder_enabled', 'false');
+    } catch (e) {}
+  };
 
   let realtimeSub = null;
 
@@ -83,13 +166,10 @@ export function NotificationProvider({ children }) {
 
   return (
     <NotificationContext.Provider value={{
-      notifications,
-      unreadCount,
-      pendingProgram,
-      loadNotifications,
-      markAsRead,
-      markAllAsRead,
-      clearPendingProgram,
+      notifications, unreadCount, pendingProgram,
+      loadNotifications, markAsRead, markAllAsRead, clearPendingProgram,
+      reminderEnabled, reminderHour, scheduleWodReminder, cancelWodReminder,
+      pushToken, REMINDER_HOURS,
     }}>
       {children}
     </NotificationContext.Provider>
