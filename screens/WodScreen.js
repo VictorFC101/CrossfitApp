@@ -9,6 +9,25 @@ import { getTodayDay, isTodayInProgram, formatDateShort, getToday } from '../dat
 
 const MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
+const TYPE_COLORS = {
+  'endurance extra': '#f77f00',
+  'endurance pesado': '#e9c46a',
+  'endurance': '#f4a261',
+  'crossfit general': '#e63946',
+  'crossfit largo': '#9b5de5',
+  'halterofilia': '#3a86ff',
+  'fuerza': '#06d6a0',
+  'powerlifting': '#ef476f',
+};
+function typeColor(type, fallback) {
+  if (!type) return fallback;
+  const key = type.toLowerCase();
+  for (const [k, v] of Object.entries(TYPE_COLORS)) {
+    if (key.includes(k)) return v;
+  }
+  return fallback;
+}
+
 // ── Tarjeta de resultados para compartir ──────────────────────
 function ShareCard({ day, resultado, notas, acento }) {
   const now = new Date();
@@ -194,8 +213,8 @@ export default function WodScreen({ navigate }) {
         </View>
         <Text style={{ fontSize: t.fs(28), fontWeight: '900', letterSpacing: 2, color: t.text }}>{day.label}</Text>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
-          <View style={{ backgroundColor: t.accent + '20', borderWidth: 1, borderColor: t.accent + '40', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 }}>
-            <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: t.accent, letterSpacing: 1 }}>🏋️ {day.type.toUpperCase()}</Text>
+          <View style={{ backgroundColor: typeColor(day.type, t.accent) + '20', borderWidth: 1, borderColor: typeColor(day.type, t.accent) + '40', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 }}>
+            <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: typeColor(day.type, t.accent), letterSpacing: 1 }}>🏋️ {day.type.toUpperCase()}</Text>
           </View>
           {day.wod?.type && (
             <View style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 }}>
