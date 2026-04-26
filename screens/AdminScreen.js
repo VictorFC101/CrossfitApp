@@ -8,6 +8,7 @@ import { supabase } from '../supabase';
 import ProgramBuilderScreen from './ProgramBuilderScreen';
 import AssignProgramScreen from './AssignProgramScreen';
 import { mayo2026 } from '../assets/mayo2026';
+import * as DocumentPicker from 'expo-document-picker';
 
 const MESES_LARGOS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -139,55 +140,115 @@ function PinScreen({ onSuccess }) {
 
 // ─── ADD JSON ─────────────────────────────────────────────────────────────────
 
+const WEEKDAYS_ES = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+
+function stripProgramDates(program) {
+  return {
+    ...program,
+    weeks: program.weeks.map(week => ({
+      ...week,
+      dates: '',
+      days: week.days.map(day => {
+        // "Lunes 5 May" → "Lunes" / "Miércoles 7 May" → "Miércoles"
+        const firstWord = (day.day || '').split(' ')[0];
+        const cleaned = WEEKDAYS_ES.includes(firstWord) ? firstWord : day.day;
+        return { ...day, day: cleaned };
+      }),
+    })),
+  };
+}
+
 function AddJsonModal({ visible, onClose, onSave }) {
   const t = useTheme();
-  const [jsonText, setJsonText] = useState('');
   const [error, setError] = useState('');
   const [preview, setPreview] = useState(null);
+  const [fileName, setFileName] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const validate = () => {
+  const reset = () => { setError(''); setPreview(null); setFileName(''); };
+
+  const pickFile = async () => {
+    setLoading(true);
     try {
-      const parsed = JSON.parse(jsonText);
+      const result = await DocumentPicker.getDocumentAsync({ type: 'application/json', copyToCacheDirectory: true });
+      if (result.canceled) { setLoading(false); return; }
+      const asset = result.assets[0];
+      setFileName(asset.name);
+      const text = await fetch(asset.uri).then(r => r.text());
+      const parsed = JSON.parse(text);
       if (!parsed.weeks || !Array.isArray(parsed.weeks)) throw new Error('Falta el campo "weeks"');
       if (parsed.weeks.length === 0) throw new Error('"weeks" no puede estar vacío');
       for (const w of parsed.weeks) {
         if (!w.days || !Array.isArray(w.days)) throw new Error('Cada semana necesita un array "days"');
       }
-      setPreview(parsed); setError('');
-    } catch (e) { setError(e.message); setPreview(null); }
+      setPreview(stripProgramDates(parsed));
+      setError('');
+    } catch (e) {
+      setError(e.message);
+      setPreview(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSave = () => {
     if (!preview) return;
     onSave(preview);
-    setJsonText(''); setPreview(null); onClose();
+    reset();
+    onClose();
   };
+
+  const handleClose = () => { reset(); onClose(); };
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16, paddingTop: 56 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ fontSize: t.fs(18), fontWeight: '900', color: t.text }}>PEGAR JSON</Text>
-            <TouchableOpacity onPress={onClose} style={{ backgroundColor: t.bg4, borderRadius: 8, padding: 8, borderWidth: 1, borderColor: t.border }}>
+            <Text style={{ fontSize: t.fs(18), fontWeight: '900', color: t.text }}>SUBIR JSON</Text>
+            <TouchableOpacity onPress={handleClose} style={{ backgroundColor: t.bg4, borderRadius: 8, padding: 8, borderWidth: 1, borderColor: t.border }}>
               <Text style={{ fontSize: t.fs(12), color: t.text2, fontWeight: '700' }}>✕ CERRAR</Text>
             </TouchableOpacity>
           </View>
         </View>
         <ScrollView contentContainerStyle={{ padding: 14 }}>
-          <TextInput value={jsonText} onChangeText={v => { setJsonText(v); setError(''); setPreview(null); }}
-            placeholder='{ "weeks": [...] }' placeholderTextColor={t.text3} multiline numberOfLines={12}
-            style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 10, color: t.text, fontSize: t.fs(11), padding: 12, textAlignVertical: 'top', minHeight: 200, marginBottom: 12 }} />
-          {error ? <View style={{ backgroundColor: '#e6394420', borderRadius: 8, padding: 12, marginBottom: 12 }}><Text style={{ color: '#e63946', fontSize: t.fs(12) }}>❌ {error}</Text></View> : null}
-          {preview ? <View style={{ backgroundColor: '#52b78820', borderRadius: 8, padding: 12, marginBottom: 12 }}>
-            <Text style={{ color: '#52b788', fontSize: t.fs(12), fontWeight: '700', marginBottom: 4 }}>✅ JSON válido</Text>
-            <Text style={{ color: '#52b788', fontSize: t.fs(11) }}>{preview.weeks.length} semanas · {preview.weeks.reduce((a, w) => a + w.days.length, 0)} días</Text>
-          </View> : null}
-          <TouchableOpacity onPress={validate} style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 10, padding: 14, alignItems: 'center', marginBottom: 10 }}>
-            <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text2 }}>🔍 VALIDAR JSON</Text>
+          <TouchableOpacity onPress={pickFile} disabled={loading}
+            style={{ backgroundColor: t.card, borderWidth: 2, borderColor: t.accent + '60', borderStyle: 'dashed', borderRadius: 14, padding: 32, alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            {loading
+              ? <ActivityIndicator color={t.accent} />
+              : <>
+                  <Text style={{ fontSize: 36 }}>📂</Text>
+                  <Text style={{ fontSize: t.fs(13), fontWeight: '800', color: t.text }}>
+                    {fileName || 'Seleccionar archivo JSON'}
+                  </Text>
+                  <Text style={{ fontSize: t.fs(10), color: t.text3, textAlign: 'center' }}>
+                    {fileName ? 'Toca para cambiar el archivo' : 'Toca para abrir el explorador de archivos'}
+                  </Text>
+                </>
+            }
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleSave} disabled={!preview} style={{ backgroundColor: preview ? t.accent : t.border, borderRadius: 10, padding: 14, alignItems: 'center' }}>
-            <Text style={{ fontSize: t.fs(13), fontWeight: '900', color: '#fff' }}>💾 GUARDAR PROGRAMA</Text>
+
+          {error ? (
+            <View style={{ backgroundColor: '#e6394420', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+              <Text style={{ color: '#e63946', fontSize: t.fs(12) }}>❌ {error}</Text>
+            </View>
+          ) : null}
+
+          {preview ? (
+            <View style={{ backgroundColor: '#52b78820', borderRadius: 8, padding: 14, marginBottom: 16 }}>
+              <Text style={{ color: '#52b788', fontSize: t.fs(12), fontWeight: '700', marginBottom: 6 }}>✅ Programa listo para guardar</Text>
+              <Text style={{ color: '#52b788', fontSize: t.fs(11), marginBottom: 2 }}>
+                {preview.name || 'Sin nombre'} · {preview.weeks.length} semanas
+              </Text>
+              <Text style={{ color: '#52b788', fontSize: t.fs(11) }}>
+                {preview.weeks.reduce((a, w) => a + w.days.length, 0)} días · Fechas eliminadas
+              </Text>
+            </View>
+          ) : null}
+
+          <TouchableOpacity onPress={handleSave} disabled={!preview}
+            style={{ backgroundColor: preview ? t.accent : t.border, borderRadius: 10, padding: 16, alignItems: 'center' }}>
+            <Text style={{ fontSize: t.fs(13), fontWeight: '900', color: '#fff' }}>💾 GUARDAR EN TODOS LOS PROGRAMAS</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -1290,9 +1351,9 @@ export default function AdminScreen({ onClose }) {
         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
           <TouchableOpacity onPress={() => setShowAddJson(true)}
             style={{ flex: 1, backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 14, alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontSize: 24 }}>📋</Text>
-            <Text style={{ fontSize: t.fs(11), fontWeight: '700', color: t.text, textAlign: 'center' }}>PEGAR JSON</Text>
-            <Text style={{ fontSize: t.fs(9), color: t.text3, textAlign: 'center' }}>Pega un JSON ya preparado</Text>
+            <Text style={{ fontSize: 24 }}>📂</Text>
+            <Text style={{ fontSize: t.fs(11), fontWeight: '700', color: t.text, textAlign: 'center' }}>SUBIR JSON</Text>
+            <Text style={{ fontSize: t.fs(9), color: t.text3, textAlign: 'center' }}>Sube un archivo JSON de programa</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setShowBuilder(true)}
             style={{ flex: 1, backgroundColor: '#52b78815', borderWidth: 1, borderColor: '#52b78840', borderRadius: 12, padding: 14, alignItems: 'center', gap: 6 }}>
