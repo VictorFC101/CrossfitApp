@@ -170,12 +170,28 @@ function AddJsonModal({ visible, onClose, onSave }) {
   const pickFile = async () => {
     setLoading(true);
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: 'application/json', copyToCacheDirectory: true });
+      const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
       if (result.canceled) { setLoading(false); return; }
       const asset = result.assets[0];
       setFileName(asset.name);
-      const text = await fetch(asset.uri).then(r => r.text());
-      const parsed = JSON.parse(text);
+      let text = await fetch(asset.uri).then(r => r.text());
+      let parsed;
+      // Detecta archivos .jsx/.js con "export const/default nombre = { ... }"
+      const exportMatch = text.match(/export\s+(?:default\s+|const\s+\w+\s*=\s*)(\{[\s\S]*)/);
+      if (exportMatch) {
+        // Extrae el objeto balanceando llaves
+        let raw = exportMatch[1];
+        let depth = 0, end = -1;
+        for (let i = 0; i < raw.length; i++) {
+          if (raw[i] === '{') depth++;
+          else if (raw[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+        }
+        const objStr = end !== -1 ? raw.slice(0, end + 1) : raw;
+        // eslint-disable-next-line no-new-func
+        parsed = new Function(`return (${objStr})`)();
+      } else {
+        parsed = JSON.parse(text);
+      }
       if (!parsed.weeks || !Array.isArray(parsed.weeks)) throw new Error('Falta el campo "weeks"');
       if (parsed.weeks.length === 0) throw new Error('"weeks" no puede estar vacío');
       for (const w of parsed.weeks) {
