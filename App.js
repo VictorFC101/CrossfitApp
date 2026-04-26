@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { useState, useEffect } from 'react';
+import SplashAnimated from './SplashAnimated';
 import { AppProvider } from './AppContext';
 import { ThemeProvider, useTheme } from './ThemeContext';
 import { ProgramProvider } from './ProgramContext';
@@ -81,15 +82,39 @@ function AppInner() {
       <View style={{ flex: 1 }}>
         {Screen ? <Screen navigate={setActive} session={session} /> : null}
       </View>
-      <View style={{ flexDirection: 'row', backgroundColor: t.dark ? '#07070e' : '#ffffff', borderTopWidth: 1, borderTopColor: t.border, paddingBottom: 24, paddingTop: 10 }}>
-        {Object.keys(SCREENS).map(key => (
-          <TouchableOpacity key={key} onPress={() => setActive(key)}
-            style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={{ color: active === key ? t.accent : t.text3, fontSize: t.fs(8), fontWeight: '700', letterSpacing: 0.3 }}>
-              {TAB_LABELS[key]}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={{ backgroundColor: t.dark ? '#07070e' : '#ffffff', borderTopWidth: 1, borderTopColor: t.border }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: 24 }}
+        >
+          {Object.keys(SCREENS).map(key => (
+            <TouchableOpacity
+              key={key}
+              onPress={() => setActive(key)}
+              style={{
+                paddingHorizontal: 20,
+                paddingTop: 10,
+                paddingBottom: 6,
+                alignItems: 'center',
+                borderBottomWidth: 2.5,
+                borderBottomColor: active === key ? t.accent : 'transparent',
+              }}
+            >
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: active === key ? t.accent : t.text3,
+                  fontSize: t.fs(12),
+                  fontWeight: '700',
+                  letterSpacing: 1,
+                }}
+              >
+                {TAB_LABELS[key]}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
     </View>
     </SocialProvider>
@@ -97,15 +122,23 @@ function AppInner() {
 }
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
+
   return (
-    <ThemeProvider>
-      <ProgramProvider>
-        <NotificationProvider>
-          <AppProvider>
-            <AppInner />
-          </AppProvider>
-        </NotificationProvider>
-      </ProgramProvider>
-    </ThemeProvider>
+    <View style={{ flex: 1 }}>
+      <ThemeProvider>
+        <ProgramProvider>
+          <NotificationProvider>
+            <AppProvider>
+              <AppInner />
+            </AppProvider>
+          </NotificationProvider>
+        </ProgramProvider>
+      </ThemeProvider>
+
+      {showSplash && (
+        <SplashAnimated onFinish={() => setShowSplash(false)} />
+      )}
+    </View>
   );
 }

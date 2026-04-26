@@ -276,23 +276,92 @@ export default function WodScreen({ navigate }) {
         )}
 
         {/* WOD */}
-        {day.wod && day.wod.movements && (
+        {day.wod && (day.wod.movements || day.wod.parts || day.wod.emomMinutes) && (
           <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.accent + '30', borderRadius: 10, padding: 14, marginBottom: 10 }}>
-            <Text style={{ fontSize: t.fs(12), fontWeight: '700', letterSpacing: 2, color: t.accent, marginBottom: 10 }}>⚡ WOD — {day.wod.type} {day.wod.duration}</Text>
-            {day.wod.formatNote && (
-              <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 10, marginBottom: 10 }}>
-                <Text style={{ fontSize: t.fs(11), color: t.text2 }}>⚡ {day.wod.format} — {day.wod.formatNote}</Text>
-              </View>
-            )}
-            {day.wod.movements.filter(m => m.name !== '—').map((m, i) => (
-              <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent, borderRadius: 8, padding: 10, marginBottom: 7 }}>
-                <Text style={{ minWidth: 38, fontSize: t.fs(13), fontWeight: '700', color: t.accent }}>{m.reps}</Text>
-                <View>
-                  <Text style={{ fontSize: t.fs(14), fontWeight: '700', color: t.text }}>{m.name}</Text>
-                  {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 2 }}>{m.weight}</Text>}
+            <Text style={{ fontSize: t.fs(12), fontWeight: '700', letterSpacing: 2, color: t.accent, marginBottom: 10 }}>
+              ⚡ WOD{day.wod.parts ? ` — DOBLE WOD` : day.wod.type ? ` — ${day.wod.type} ${day.wod.duration}` : ''}
+            </Text>
+
+            {/* WOD con múltiples partes */}
+            {day.wod.parts ? day.wod.parts.map((part, pi) => (
+              <View key={pi} style={{ marginBottom: pi < day.wod.parts.length - 1 ? 14 : 0 }}>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <View style={{ backgroundColor: t.accent + '20', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: t.accent }}>WOD {pi + 1} · {part.type} · {part.duration}</Text>
+                  </View>
+                  {part.format && <View style={{ backgroundColor: t.bg4, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Text style={{ fontSize: t.fs(9), color: t.text2 }}>{part.format}</Text>
+                  </View>}
                 </View>
+                {part.formatNote && (
+                  <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 8 }}>
+                    <Text style={{ fontSize: t.fs(11), color: t.text2 }}>{part.formatNote}</Text>
+                  </View>
+                )}
+                {part.movements?.filter(m => m.name !== '—').map((m, i) => (
+                  <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent, borderRadius: 8, padding: 10, marginBottom: 6 }}>
+                    <Text style={{ minWidth: 38, fontSize: t.fs(13), fontWeight: '700', color: t.accent }}>{m.reps}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{m.name}</Text>
+                      {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 2 }}>{m.weight}</Text>}
+                    </View>
+                  </View>
+                ))}
+                {pi < day.wod.parts.length - 1 && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                    <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
+                    <Text style={{ fontSize: t.fs(9), color: t.text3, fontWeight: '700', letterSpacing: 2 }}>2 MIN DESCANSO</Text>
+                    <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
+                  </View>
+                )}
               </View>
-            ))}
+            )) : null}
+
+            {/* WOD EMOM */}
+            {!day.wod.parts && day.wod.emomMinutes && (
+              <>
+                {day.wod.formatNote && (
+                  <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 8 }}>
+                    <Text style={{ fontSize: t.fs(11), color: t.text2 }}>{day.wod.formatNote}</Text>
+                  </View>
+                )}
+                {day.wod.emomMinutes.map((min, i) => (
+                  <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent, borderRadius: 8, padding: 10, marginBottom: 6 }}>
+                    <Text style={{ minWidth: 52, fontSize: t.fs(10), fontWeight: '700', color: t.accent }}>{min.min}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{min.work}</Text>
+                      {min.weight && min.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 2 }}>{min.weight}</Text>}
+                    </View>
+                  </View>
+                ))}
+              </>
+            )}
+
+            {/* WOD LADDER / estándar */}
+            {!day.wod.parts && !day.wod.emomMinutes && day.wod.movements && (
+              <>
+                {day.wod.formatNote && (
+                  <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 8 }}>
+                    <Text style={{ fontSize: t.fs(11), color: t.text2 }}>⚡ {day.wod.format} — {day.wod.formatNote}</Text>
+                  </View>
+                )}
+                {day.wod.ladderNote && (
+                  <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 8 }}>
+                    <Text style={{ fontSize: t.fs(11), color: t.text2 }}>📐 {day.wod.ladderNote}</Text>
+                  </View>
+                )}
+                {day.wod.movements.filter(m => m.name !== '—').map((m, i) => (
+                  <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent, borderRadius: 8, padding: 10, marginBottom: 7 }}>
+                    <Text style={{ minWidth: 38, fontSize: t.fs(13), fontWeight: '700', color: t.accent }}>{m.reps}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: t.fs(14), fontWeight: '700', color: t.text }}>{m.name}</Text>
+                      {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 2 }}>{m.weight}</Text>}
+                    </View>
+                  </View>
+                ))}
+              </>
+            )}
+
             {day.wod.gymNote && (
               <View style={{ backgroundColor: t.dark ? '#080f08' : '#e8f5e9', borderWidth: 1, borderColor: t.dark ? '#1e3e1e' : '#c8e6c9', borderRadius: 6, padding: 10, marginTop: 4 }}>
                 <Text style={{ fontSize: t.fs(11), color: '#5a9a5a' }}>💡 {day.wod.gymNote}</Text>

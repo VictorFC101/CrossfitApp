@@ -172,6 +172,45 @@ export function getInitialIdx(allDays) {
   return futureBestIdx;
 }
 
+// Asigna fechas reales a un programa-plantilla dado un día de inicio (YYYY-MM-DD).
+// Extrae el nombre del día en español de cada entrada (p.ej. "Lunes" o "Lunes 5 May")
+// y avanza un cursor desde startDate hasta encontrar ese día de la semana.
+const DOW_ES = {
+  'Lunes': 1, 'Martes': 2, 'Miércoles': 3,
+  'Jueves': 4, 'Viernes': 5, 'Sábado': 6, 'Domingo': 0,
+};
+const DIAS_LONG_ES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+const MESES_SHORT_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+export function assignDatesFromStart(plan, startDateStr) {
+  const [y, m, d] = startDateStr.split('-').map(Number);
+  if (!y || !m || !d) return plan;
+  let cursor = new Date(y, m - 1, d, 12, 0, 0);
+
+  return {
+    ...plan,
+    weeks: plan.weeks.map(week => ({
+      ...week,
+      days: week.days.map(day => {
+        const dayName = day.day?.trim().split(' ')[0];
+        const targetDOW = DOW_ES[dayName];
+        if (targetDOW === undefined) return day;
+
+        let attempts = 0;
+        while (cursor.getDay() !== targetDOW && attempts < 7) {
+          cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
+          attempts++;
+        }
+        if (cursor.getDay() !== targetDOW) return day;
+
+        const newDayStr = `${DIAS_LONG_ES[cursor.getDay()]} ${cursor.getDate()} ${MESES_SHORT_ES[cursor.getMonth()]}`;
+        cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
+        return { ...day, day: newDayStr };
+      }),
+    })),
+  };
+}
+
 export function formatDateShort(date) {
   const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
