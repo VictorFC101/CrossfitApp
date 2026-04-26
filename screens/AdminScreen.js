@@ -7,6 +7,7 @@ import { parseDateFromDay } from '../dateUtils';
 import { supabase } from '../supabase';
 import ProgramBuilderScreen from './ProgramBuilderScreen';
 import AssignProgramScreen from './AssignProgramScreen';
+import { mayo2026 } from '../assets/mayo2026';
 
 const MESES_LARGOS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -1326,9 +1327,18 @@ export default function AdminScreen({ onClose }) {
         </TouchableOpacity>
 
         {/* PROGRAMAS */}
-        <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700', marginBottom: 10 }}>
-          TODOS LOS PROGRAMAS ({programs.length})
-        </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700' }}>
+            TODOS LOS PROGRAMAS ({programs.length})
+          </Text>
+          {!programs.some(p => p.name?.toLowerCase().includes('mayo')) && (
+            <TouchableOpacity
+              onPress={() => handleAdd({ ...mayo2026, id: undefined })}
+              style={{ backgroundColor: '#06d6a020', borderWidth: 1, borderColor: '#06d6a060', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}>
+              <Text style={{ fontSize: t.fs(10), color: '#06d6a0', fontWeight: '700' }}>+ IMPORTAR MAYO 2026</Text>
+            </TouchableOpacity>
+          )}
+        </View>
         {programs.map((program) => {
           const isTemplate = !!program._isTemplate;
           const isActive = program._meta?.status === 'activo';

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { mayo2026 as defaultPlan } from './assets/mayo2026';
+import { plan as legacyDefaultPlan } from './data';
 import { parseDateFromDay } from './dateUtils';
 
 const ProgramContext = createContext();
@@ -95,28 +95,16 @@ export function ProgramProvider({ children }) {
       const stored = await AsyncStorage.getItem('all_programs');
       let allPrograms = stored ? JSON.parse(stored) : [];
 
-      // Si no hay programas guardados, usar mayo2026 como base
-      if (allPrograms.length === 0) {
-        const base = { ...defaultPlan, id: 'default' };
-        allPrograms = [base];
-        await AsyncStorage.setItem('all_programs', JSON.stringify(allPrograms));
-      }
-
-      // Migración: reemplazar el programa por defecto antiguo (Marzo 2026) por mayo2026
-      const hasOldMarch = allPrograms.some(
-        p => p.id === 'default' && p.weeks?.[0]?.days?.[0]?.day?.includes('30 Mar')
-      );
-      const hasMayo = allPrograms.some(p => p.name?.toLowerCase().includes('mayo'));
-      if (hasOldMarch && !hasMayo) {
+      // Migración: eliminar el programa por defecto antiguo (Marzo 2026) sin reemplazarlo
+      if (allPrograms.some(p => p.id === 'default' && p.weeks?.[0]?.days?.[0]?.day?.includes('30 Mar'))) {
         allPrograms = allPrograms.filter(p => p.id !== 'default');
-        allPrograms = [...allPrograms, { ...defaultPlan, id: 'mayo2026-default' }];
         await AsyncStorage.setItem('all_programs', JSON.stringify(allPrograms));
       }
 
       setPrograms(allPrograms.map(enrichProgram));
     } catch (e) {
       console.error('Error loading programs:', e);
-      setPrograms([enrichProgram({ ...defaultPlan, id: 'default' })]);
+      setPrograms([]);
     } finally {
       setLoading(false);
     }
