@@ -176,19 +176,32 @@ function AddJsonModal({ visible, onClose, onSave }) {
       setFileName(asset.name);
       let text = await fetch(asset.uri).then(r => r.text());
       let parsed;
-      // Detecta archivos .jsx/.js con "export const/default nombre = { ... }"
-      const exportMatch = text.match(/export\s+(?:default\s+|const\s+\w+\s*=\s*)(\{[\s\S]*)/);
-      if (exportMatch) {
-        // Extrae el objeto balanceando llaves
-        let raw = exportMatch[1];
+      // Detecta .jsx/.js: strip imports y convierte object literal a JSON
+      const isJsFile = /\.(jsx?|tsx?)$/i.test(asset.name) ||
+        text.trimStart().startsWith('import ') ||
+        text.trimStart().startsWith('export ') ||
+        /export\s+(const|default)/.test(text);
+      if (isJsFile) {
+        // 1. Eliminar imports
+        let code = text.replace(/^import\b[^\n]*\n?/gm, '');
+        // 2. Eliminar export const/default
+        code = code.replace(/export\s+(?:default\s+|const\s+[\w$]+\s*=\s*)/g, '');
+        // 3. Eliminar comentarios
+        code = code.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+        // 4. Encontrar el objeto raíz balanceando llaves
+        const start = code.indexOf('{');
+        if (start === -1) throw new Error('No se encontró objeto en el archivo');
         let depth = 0, end = -1;
-        for (let i = 0; i < raw.length; i++) {
-          if (raw[i] === '{') depth++;
-          else if (raw[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+        for (let i = start; i < code.length; i++) {
+          if (code[i] === '{') depth++;
+          else if (code[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
         }
-        const objStr = end !== -1 ? raw.slice(0, end + 1) : raw;
-        // eslint-disable-next-line no-new-func
-        parsed = new Function(`return (${objStr})`)();
+        let obj = code.slice(start, end + 1);
+        // 5. Trailing commas
+        obj = obj.replace(/,(\s*[}\]])/g, '$1');
+        // 6. Claves sin comillas → con comillas
+        obj = obj.replace(/([{,]\s*)([a-zA-Z_$][\w$]*)\s*:/g, '$1"$2":');
+        parsed = JSON.parse(obj);
       } else {
         parsed = JSON.parse(text);
       }
@@ -462,7 +475,7 @@ function UserManagementScreen({ onClose }) {
     Alert.alert('Quitar programa', '¿Seguro que quieres quitar este programa al usuario?', [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Eliminar', style: 'destructive', onPress: async () => {
-        const { error } = await supabase.from('asignaciones').delete().eq('id', asigId);
+        const { error } = await supabase.from('asignaciones').update({ status: 'rechazado' }).eq('id', asigId);
         if (error) return Alert.alert('Error', error.message);
         setUserPrograms(prev => ({ ...prev, [userId]: prev[userId].filter(a => a.id !== asigId) }));
       }}
@@ -475,6 +488,7 @@ function UserManagementScreen({ onClose }) {
       .from('asignaciones')
       .select('*, programas(id, name)')
       .eq('user_id', userId)
+      .neq('status', 'rechazado')
       .order('start_date', { ascending: false });
     setUserPrograms(prev => ({ ...prev, [userId]: data || [] }));
     setExpandedUser(userId);
@@ -1261,6 +1275,7 @@ export default function AdminScreen({ onClose }) {
   const [showIAProgram, setShowIAProgram] = useState(false);
   const [rescheduleProgram, setRescheduleProgram] = useState(null);
   const [publishing, setPublishing] = useState(null);
+  const [expandedProgram, setExpandedProgram] = useState(null);
 
   const statusColor = { activo: '#52b788', futuro: '#4895ef', completado: '#555' };
   const statusLabel = { activo: '🟢 ACTIVO', futuro: '🔵 FUTURO', completado: '⚫ HISTORIAL' };
@@ -1434,6 +1449,12 @@ export default function AdminScreen({ onClose }) {
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                <TouchableOpacity onPress={() => setExpandedProgram(expandedProgram === program.id ? null : program.id)}
+                  style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 }}>
+                  <Text style={{ fontSize: t.fs(10), color: t.text2, fontWeight: '700' }}>
+                    {expandedProgram === program.id ? '▲ OCULTAR' : '👁 VER'}
+                  </Text>
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => setRescheduleProgram(program)}
                   style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 }}>
                   <Text style={{ fontSize: t.fs(10), color: t.text2, fontWeight: '700' }}>📋 COPIAR</Text>
@@ -1449,6 +1470,27 @@ export default function AdminScreen({ onClose }) {
                   </TouchableOpacity>
                 )}
               </View>
+              {expandedProgram === program.id && (
+                <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: t.border, paddingTop: 10 }}>
+                  {program.weeks?.map((week, wi) => (
+                    <View key={wi} style={{ marginBottom: 10 }}>
+                      <Text style={{ fontSize: t.fs(10), color: t.accent, fontWeight: '700', letterSpacing: 1, marginBottom: 4 }}>
+                        SEMANA {week.number} {week.focus ? `— ${week.focus}` : ''}
+                      </Text>
+                      {week.days?.map((day, di) => (
+                        <View key={di} style={{ flexDirection: 'row', gap: 8, marginBottom: 3, alignItems: 'flex-start' }}>
+                          <Text style={{ fontSize: t.fs(10), color: t.text3, width: 70 }}>{day.day}</Text>
+                          <Text style={{ fontSize: t.fs(10), color: t.text2, fontWeight: '600', flex: 1 }}>{day.type || day.trainType || '—'}</Text>
+                          <Text style={{ fontSize: t.fs(9), color: t.text3 }}>
+                            {day.strength?.sets?.length ? `${day.strength.sets.length} series` : ''}
+                            {day.wod ? ' · WOD' : ''}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           );
         })}
