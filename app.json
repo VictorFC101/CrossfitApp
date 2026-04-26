@@ -35,7 +35,7 @@
     },
     "owner": "victorfc",
     "runtimeVersion": {
-      "policy": "appVersion"
+      "policy": "sdkVersion"
     },
     "updates": {
       "url": "https://u.expo.dev/abce4203-fc54-4dc8-9646-c11af1967ae1"
