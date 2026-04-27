@@ -275,7 +275,7 @@ function WodCreator({ visible, onClose, onSave }) {
 }
 
 export default function HistorialScreen() {
-  const { resultados, rms, saveResultado, wodsLibres, saveWodLibre, deleteWodLibre } = useApp();
+  const { resultados, rms, saveResultado, wodsLibres, saveWodLibre, deleteWodLibre, partnerProfile, partnerResultados } = useApp();
   const t = useTheme();
   const { activeProgram } = useProgram();
   const { feed, esAmigo } = useSocial();
@@ -486,6 +486,29 @@ export default function HistorialScreen() {
                               {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text3 }}>· {m.weight}</Text>}
                             </View>
                           ))}
+                        </View>
+                      )}
+
+                      {partnerProfile && partnerResultados[day.day] && (
+                        <View style={{ backgroundColor: accent + '08', borderWidth: 1, borderColor: accent + '30', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                          <Text style={{ fontSize: t.fs(10), color: accent, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>🤝 TU PAREJA</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: accent + '20', alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: accent }}>
+                                {partnerProfile.nombre?.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase() || '??'}
+                              </Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{partnerProfile.nombre}</Text>
+                              <View style={{ marginTop: 2, alignSelf: 'flex-start', backgroundColor: partnerResultados[day.day].rx ? accent + '20' : '#f4a26120', borderRadius: 3, paddingHorizontal: 5, paddingVertical: 1 }}>
+                                <Text style={{ fontSize: t.fs(7), color: partnerResultados[day.day].rx ? accent : '#f4a261', fontWeight: '700' }}>{partnerResultados[day.day].rx ? 'Rx' : 'Scaled'}</Text>
+                              </View>
+                            </View>
+                            <Text style={{ fontSize: t.fs(18), fontWeight: '900', color: accent }}>{partnerResultados[day.day].resultado || '—'}</Text>
+                          </View>
+                          {!!partnerResultados[day.day].notas && (
+                            <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 8, fontStyle: 'italic' }}>"{partnerResultados[day.day].notas}"</Text>
+                          )}
                         </View>
                       )}
 

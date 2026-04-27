@@ -10,6 +10,8 @@ export function AppProvider({ children }) {
   const [wodsLibres, setWodsLibres] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [partnerProfile, setPartnerProfile] = useState(null);
+  const [partnerResultados, setPartnerResultados] = useState({});
 
   useEffect(() => {
     loadLocalData();
@@ -53,11 +55,37 @@ export function AppProvider({ children }) {
       // Traer campos privados que la vista pública no expone
       const { data: privateData } = await supabase
         .from('usuarios')
-        .select('onboarding_completed, genero, push_token, box_id')
+        .select('onboarding_completed, genero, push_token, box_id, partner_id')
         .eq('id', uid)
         .single();
 
       if (data) setUserProfile({ ...data, ...(privateData || {}) });
+
+      // Cargar perfil y resultados del partner
+      const partnerId = privateData?.partner_id;
+      if (partnerId) {
+        const { data: pProfile } = await supabase
+          .from('usuarios_publicos')
+          .select('id, nombre, avatar_url')
+          .eq('id', partnerId)
+          .single();
+        if (pProfile) setPartnerProfile(pProfile);
+
+        const { data: pRes } = await supabase
+          .from('resultados')
+          .select('dia, resultado, notas, rx')
+          .eq('user_id', partnerId);
+        if (pRes?.length) {
+          const pMap = {};
+          pRes.forEach(r => { pMap[r.dia] = { resultado: r.resultado, notas: r.notas, rx: r.rx !== false }; });
+          setPartnerResultados(pMap);
+        } else {
+          setPartnerResultados({});
+        }
+      } else {
+        setPartnerProfile(null);
+        setPartnerResultados({});
+      }
 
       // Cargar RMs desde Supabase (fuente de verdad)
       const { data: rmsData } = await supabase
@@ -86,6 +114,32 @@ export function AppProvider({ children }) {
     finally { setLoadingProfile(false); }
   };
 
+  const setPartner = async (partnerId) => {
+    try {
+      if (!userProfile?.id) return;
+      await supabase.from('usuarios').update({ partner_id: partnerId }).eq('id', userProfile.id);
+      setUserProfile(prev => ({ ...prev, partner_id: partnerId }));
+      const { data: pProfile } = await supabase
+        .from('usuarios_publicos').select('id, nombre, avatar_url').eq('id', partnerId).single();
+      if (pProfile) setPartnerProfile(pProfile);
+      const { data: pRes } = await supabase
+        .from('resultados').select('dia, resultado, notas, rx').eq('user_id', partnerId);
+      const pMap = {};
+      (pRes || []).forEach(r => { pMap[r.dia] = { resultado: r.resultado, notas: r.notas, rx: r.rx !== false }; });
+      setPartnerResultados(pMap);
+    } catch (e) {}
+  };
+
+  const removePartner = async () => {
+    try {
+      if (!userProfile?.id) return;
+      await supabase.from('usuarios').update({ partner_id: null }).eq('id', userProfile.id);
+      setUserProfile(prev => ({ ...prev, partner_id: null }));
+      setPartnerProfile(null);
+      setPartnerResultados({});
+    } catch (e) {}
+  };
+
   const completeOnboarding = async () => {
     try {
       if (userProfile?.id) {
@@ -102,6 +156,8 @@ export function AppProvider({ children }) {
       setResultados({});
       setWodsLibres([]);
       setUserProfile(null);
+      setPartnerProfile(null);
+      setPartnerResultados({});
       await AsyncStorage.multiRemove(['user_rms', 'user_resultados', 'user_wods_libres', 'user_nombre', 'user_genero']);
     } catch (e) {}
   };
@@ -213,6 +269,7 @@ export function AppProvider({ children }) {
       resultados, saveResultado,
       wodsLibres, saveWodLibre, deleteWodLibre,
       userProfile, loadingProfile, loadUserProfile,
+      partnerProfile, partnerResultados, setPartner, removePartner,
       isAdmin, isCoach, isAtleta,
       logout, completeOnboarding,
     }}>

@@ -9,6 +9,7 @@ import { useApp } from '../AppContext';
 import { useTheme, ACCENTS, FONT_SCALES } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { useNotifications, REMINDER_HOURS } from '../NotificationContext';
+import { useSocial } from '../SocialContext';
 import { parseDateFromDay } from '../dateUtils';
 import { supabase } from '../supabase';
 import { RM_MOVEMENTS } from '../constants';
@@ -36,9 +37,10 @@ function getProgramInfo(plan) {
 }
 
 export default function ProfileScreen() {
-  const { rms, resultados, userProfile, logout, loadUserProfile } = useApp();
+  const { rms, resultados, userProfile, logout, loadUserProfile, partnerProfile, setPartner, removePartner } = useApp();
   const t = useTheme();
   const { reminderEnabled, reminderHour, scheduleWodReminder, cancelWodReminder } = useNotifications();
+  const { amistades, myUserId } = useSocial();
   const { activeProgram } = useProgram();
   const plan = activeProgram;
   const [nombre, setNombre] = useState('');
@@ -353,6 +355,53 @@ export default function ProfileScreen() {
           </Text>
           <Text style={{ fontSize: t.fs(11), color: t.text2 }}>{programInfo.range} · En pareja</Text>
           <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 2 }}>{programInfo.subtitle}</Text>
+        </View>
+
+        {/* MI PAREJA */}
+        <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>🤝 MI PAREJA</Text>
+        <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+          {partnerProfile ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: t.accent + '20', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: t.fs(16), fontWeight: '900', color: t.accent }}>
+                  {partnerProfile.nombre?.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase() || '??'}
+                </Text>
+              </View>
+              <Text style={{ flex: 1, fontSize: t.fs(15), fontWeight: '900', color: t.text }}>{partnerProfile.nombre}</Text>
+              <TouchableOpacity onPress={removePartner}
+                style={{ backgroundColor: '#e6394420', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#e6394440' }}>
+                <Text style={{ fontSize: t.fs(11), color: '#e63946', fontWeight: '700' }}>Cambiar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <Text style={{ fontSize: t.fs(12), color: t.text3, marginBottom: 12, lineHeight: t.fs(18) }}>
+                Elige un compañero de entrenamiento para ver sus resultados junto a los tuyos.
+              </Text>
+              {amistades.length === 0 ? (
+                <Text style={{ fontSize: t.fs(12), color: t.text3, textAlign: 'center', fontStyle: 'italic' }}>
+                  Añade amigos en Social para poder elegir pareja
+                </Text>
+              ) : (
+                amistades.map((a, i) => {
+                  const amigo = a.solicitante?.id === myUserId ? a.receptor : a.solicitante;
+                  if (!amigo) return null;
+                  return (
+                    <TouchableOpacity key={i} onPress={() => setPartner(amigo.id)}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, marginBottom: 8 }}>
+                      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: t.accent + '20', alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: t.accent }}>
+                          {(amigo.nombre || amigo.email || '?').split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase()}
+                        </Text>
+                      </View>
+                      <Text style={{ flex: 1, fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{amigo.nombre || amigo.email}</Text>
+                      <Text style={{ fontSize: t.fs(11), color: t.accent, fontWeight: '700' }}>Elegir →</Text>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </>
+          )}
         </View>
 
         {/* NOTIFICACIONES */}

@@ -239,7 +239,7 @@ function detectFormat(wod) {
 
 // ─────────────────────────────────────────────────────────────
 export default function WodScreen({ navigate }) {
-  const { rms, resultados, saveResultado } = useApp();
+  const { rms, resultados, saveResultado, partnerProfile, partnerResultados } = useApp();
   const t = useTheme();
   const { activeProgram } = useProgram();
   const [resultado, setResultado] = useState('');
@@ -523,6 +523,32 @@ export default function WodScreen({ navigate }) {
 
         {/* PROGRESIÓN */}
         <ProgressStrip resultados={resultados} currentDayKey={day.day} t={t} />
+
+        {/* RESULTADO DE LA PAREJA */}
+        {partnerProfile && partnerResultados[day.day] && (() => {
+          const pr = partnerResultados[day.day];
+          const initials = partnerProfile.nombre?.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase() || '??';
+          return (
+            <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.accent + '30', borderRadius: 10, padding: 14, marginBottom: 10 }}>
+              <Text style={{ fontSize: t.fs(10), fontWeight: '700', letterSpacing: 2, color: t.accent, marginBottom: 10 }}>🤝 RESULTADO DE TU PAREJA</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: t.accent + '20', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: t.fs(13), fontWeight: '900', color: t.accent }}>{initials}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{partnerProfile.nombre || 'Tu pareja'}</Text>
+                  <View style={{ marginTop: 3, alignSelf: 'flex-start', backgroundColor: pr.rx ? t.accent + '20' : '#f4a26120', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                    <Text style={{ fontSize: t.fs(8), color: pr.rx ? t.accent : '#f4a261', fontWeight: '700' }}>{pr.rx ? 'Rx' : 'Scaled'}</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: t.fs(22), fontWeight: '900', color: t.accent }}>{pr.resultado || '—'}</Text>
+              </View>
+              {!!pr.notas && (
+                <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 8, fontStyle: 'italic' }}>"{pr.notas}"</Text>
+              )}
+            </View>
+          );
+        })()}
 
         {/* ANOTAR RESULTADO */}
         <View style={{ backgroundColor: t.dark ? '#06100a' : '#e8f5e9', borderWidth: 1, borderColor: t.dark ? '#2e6e3250' : '#c8e6c9', borderRadius: 10, padding: 14 }}>
