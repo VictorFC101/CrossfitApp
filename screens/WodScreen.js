@@ -466,14 +466,19 @@ export default function WodScreen({ navigate }) {
               </View>
             );
             if (fmt === 'fortime') return (
-              <View style={{ marginBottom: 12 }}>
-                <Text style={{ fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>TIEMPO (MIN : SEG)</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6, textAlign: 'center' }}>MINUTOS</Text>
                   <TextInput value={minutos} onChangeText={setMinutos} keyboardType="numeric" placeholder="00" placeholderTextColor={ph}
-                    style={[inputBase, { flex: 1, textAlign: 'center', fontSize: t.fs(28) }]} />
-                  <Text style={{ fontSize: t.fs(28), color: t.text3, fontWeight: '900' }}>:</Text>
+                    style={[inputBase, { textAlign: 'center', fontSize: t.fs(32) }]} />
+                </View>
+                <View style={{ alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 }}>
+                  <Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>:</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6, textAlign: 'center' }}>SEGUNDOS</Text>
                   <TextInput value={segundos} onChangeText={setSegundos} keyboardType="numeric" placeholder="00" placeholderTextColor={ph}
-                    style={[inputBase, { flex: 1, textAlign: 'center', fontSize: t.fs(28) }]} />
+                    style={[inputBase, { textAlign: 'center', fontSize: t.fs(32) }]} />
                 </View>
               </View>
             );
