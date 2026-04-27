@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 
@@ -10,6 +11,14 @@ export function AppProvider({ children }) {
   const [wodsLibres, setWodsLibres] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [onboardingCompleted, setOnboardingCompleted] = useState(false);
+  const [partnerProfile, setPartnerProfile] = useState(null);
+  const [partnerResultados, setPartnerResultados] = useState({});
+  const [partnerRequest, setPartnerRequest] = useState(null);     // solicitud recibida pendiente
+  const [sentPartnerRequest, setSentPartnerRequest] = useState(null); // solicitud enviada pendiente
+
+  const appStateRef = useRef(AppState.currentState);
+  const partnerChannelRef = useRef(null);
 
   useEffect(() => {
     loadLocalData();
@@ -20,7 +29,20 @@ export function AppProvider({ children }) {
       else setUserProfile(null);
     });
 
-    return () => subscription.unsubscribe();
+    // Refrescar perfil (y pareja) cuando la app vuelve al primer plano
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (appStateRef.current !== 'active' && nextState === 'active') {
+        supabase.auth.getUser().then(({ data: { user } }) => {
+          if (user) loadUserProfile(user.id);
+        });
+      }
+      appStateRef.current = nextState;
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      appStateSub.remove();
+    };
   }, []);
 
   const loadLocalData = async () => {
@@ -28,9 +50,11 @@ export function AppProvider({ children }) {
       const storedRms = await AsyncStorage.getItem('user_rms');
       const storedResultados = await AsyncStorage.getItem('user_resultados');
       const storedWods = await AsyncStorage.getItem('user_wods_libres');
+      const storedOnboarding = await AsyncStorage.getItem('@crossfit_onboarding_done');
       if (storedRms) setRms(JSON.parse(storedRms));
       if (storedResultados) setResultados(JSON.parse(storedResultados));
       if (storedWods) setWodsLibres(JSON.parse(storedWods));
+      if (storedOnboarding === '1') setOnboardingCompleted(true);
     } catch (e) {}
   };
 
@@ -53,11 +77,64 @@ export function AppProvider({ children }) {
       // Traer campos privados que la vista pública no expone
       const { data: privateData } = await supabase
         .from('usuarios')
-        .select('onboarding_completed, genero, push_token, box_id')
+        .select('onboarding_completed, genero, push_token, box_id, partner_id')
         .eq('id', uid)
         .single();
 
-      if (data) setUserProfile({ ...data, ...(privateData || {}) });
+      // Si Supabase no tiene onboarding_completed, usar AsyncStorage como fuente de verdad local
+      let onboardingDone = privateData?.onboarding_completed;
+      if (!onboardingDone) {
+        const local = await AsyncStorage.getItem('@crossfit_onboarding_done');
+        if (local === '1') {
+          onboardingDone = true;
+          // Reparar en Supabase en background
+          if (uid) supabase.from('usuarios').update({ onboarding_completed: true }).eq('id', uid).then(() => {});
+        }
+      }
+      if (data) setUserProfile({ ...data, ...(privateData || {}), onboarding_completed: onboardingDone });
+
+      // Cargar perfil y resultados del partner
+      const partnerId = privateData?.partner_id;
+      if (partnerId) {
+        const { data: pProfile } = await supabase
+          .from('usuarios_publicos')
+          .select('id, nombre, avatar_url')
+          .eq('id', partnerId)
+          .single();
+        if (pProfile) setPartnerProfile(pProfile);
+
+        const { data: pRes } = await supabase
+          .from('resultados')
+          .select('dia, resultado, notas, rx')
+          .eq('user_id', partnerId);
+        if (pRes?.length) {
+          const pMap = {};
+          pRes.forEach(r => { pMap[r.dia] = { resultado: r.resultado, notas: r.notas, rx: r.rx !== false }; });
+          setPartnerResultados(pMap);
+        } else {
+          setPartnerResultados({});
+        }
+      } else if (privateData !== null) {
+        // Solo limpiar si el SELECT de usuarios tuvo éxito y partner_id es explícitamente null
+        setPartnerProfile(null);
+        setPartnerResultados({});
+      }
+
+      // Cargar solicitudes de pareja pendientes
+      const { data: solicitudes } = await supabase
+        .from('solicitudes_partner')
+        .select('*, solicitante:solicitante_id(id, nombre), receptor:receptor_id(id, nombre)')
+        .or(`solicitante_id.eq.${uid},receptor_id.eq.${uid}`)
+        .eq('status', 'pendiente');
+      if (solicitudes?.length) {
+        const recibida = solicitudes.find(s => s.receptor_id === uid);
+        const enviada  = solicitudes.find(s => s.solicitante_id === uid);
+        setPartnerRequest(recibida || null);
+        setSentPartnerRequest(enviada || null);
+      } else {
+        setPartnerRequest(null);
+        setSentPartnerRequest(null);
+      }
 
       // Cargar RMs desde Supabase (fuente de verdad)
       const { data: rmsData } = await supabase
@@ -74,23 +151,120 @@ export function AppProvider({ children }) {
       // Cargar resultados desde Supabase (fuente de verdad)
       const { data: resData } = await supabase
         .from('resultados')
-        .select('dia, resultado, notas, fecha')
+        .select('dia, resultado, notas, fecha, rx, adaptacion')
         .eq('user_id', uid);
       if (resData?.length) {
         const resMap = {};
-        resData.forEach(r => { resMap[r.dia] = { resultado: r.resultado, notas: r.notas, fecha: r.fecha }; });
+        resData.forEach(r => { resMap[r.dia] = { resultado: r.resultado, notas: r.notas, fecha: r.fecha, rx: r.rx !== false, adaptacion: r.adaptacion || null }; });
         setResultados(prev => ({ ...prev, ...resMap }));
         await AsyncStorage.setItem('user_resultados', JSON.stringify({ ...resMap }));
       }
+
+      // Canal Realtime: detectar cuando la solicitud enviada es aceptada
+      if (partnerChannelRef.current) {
+        supabase.removeChannel(partnerChannelRef.current);
+        partnerChannelRef.current = null;
+      }
+      const channel = supabase
+        .channel(`solicitud-partner-${uid}`)
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'solicitudes_partner',
+          filter: `solicitante_id=eq.${uid}`,
+        }, (payload) => {
+          if (payload.new?.status === 'aceptada') {
+            loadUserProfile(uid);
+          }
+        })
+        .subscribe();
+      partnerChannelRef.current = channel;
     } catch (e) {}
     finally { setLoadingProfile(false); }
   };
 
+  const sendPartnerRequest = async (friendId, friendName) => {
+    try {
+      if (!userProfile?.id || friendId === userProfile.id) return { success: false };
+      const { data: inserted, error } = await supabase
+        .from('solicitudes_partner')
+        .insert({ solicitante_id: userProfile.id, receptor_id: friendId })
+        .select()
+        .single();
+      if (error) throw error;
+      // Actualización optimista — UI cambia de inmediato
+      setSentPartnerRequest({
+        id: inserted.id,
+        receptor: { id: friendId, nombre: friendName || 'Tu solicitud' },
+        status: 'pendiente',
+      });
+      // Notificación in-app (background)
+      supabase.from('notificaciones').insert({
+        user_id: friendId,
+        tipo: 'solicitud_partner',
+        titulo: '🤝 Solicitud de pareja',
+        mensaje: `${userProfile.nombre || 'Alguien'} quiere entrenar contigo como pareja`,
+        data: { from_user_id: userProfile.id },
+      }).then(() => {});
+      // Push notification (background)
+      supabase.from('usuarios').select('push_token').eq('id', friendId).single().then(({ data: dest }) => {
+        if (dest?.push_token) {
+          fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: dest.push_token,
+              title: '🤝 Solicitud de pareja',
+              body: `${userProfile.nombre || 'Alguien'} quiere entrenar contigo como pareja`,
+              data: { type: 'partner_request', from: userProfile.id },
+            }),
+          });
+        }
+      });
+      return { success: true };
+    } catch (e) { return { success: false, error: e.message }; }
+  };
+
+  const acceptPartnerRequest = async (requestId) => {
+    try {
+      await supabase.rpc('accept_partner_request', { p_request_id: requestId });
+      await loadUserProfile(userProfile.id);
+      return { success: true };
+    } catch (e) { return { success: false, error: e.message }; }
+  };
+
+  const rejectPartnerRequest = async (requestId) => {
+    setPartnerRequest(null); // optimista
+    try {
+      await supabase.from('solicitudes_partner').update({ status: 'rechazada' }).eq('id', requestId);
+      return { success: true };
+    } catch (e) { return { success: false, error: e.message }; }
+  };
+
+  const cancelPartnerRequest = async (requestId) => {
+    setSentPartnerRequest(null); // optimista
+    try {
+      await supabase.from('solicitudes_partner').update({ status: 'rechazada' }).eq('id', requestId);
+      return { success: true };
+    } catch (e) { return { success: false, error: e.message }; }
+  };
+
+  const removePartner = async () => {
+    try {
+      await supabase.rpc('remove_partner');
+      setPartnerProfile(null);
+      setPartnerResultados({});
+      setUserProfile(prev => ({ ...prev, partner_id: null }));
+    } catch (e) {}
+  };
+
   const completeOnboarding = async () => {
+    await AsyncStorage.setItem('@crossfit_onboarding_done', '1').catch(() => {});
+    setOnboardingCompleted(true);
+    setUserProfile(prev => prev ? { ...prev, onboarding_completed: true } : prev);
     try {
       if (userProfile?.id) {
         await supabase.from('usuarios').update({ onboarding_completed: true }).eq('id', userProfile.id);
-        setUserProfile(prev => ({ ...prev, onboarding_completed: true }));
       }
     } catch (e) {}
   };
@@ -102,6 +276,10 @@ export function AppProvider({ children }) {
       setResultados({});
       setWodsLibres([]);
       setUserProfile(null);
+      setPartnerProfile(null);
+      setPartnerResultados({});
+      setPartnerRequest(null);
+      setSentPartnerRequest(null);
       await AsyncStorage.multiRemove(['user_rms', 'user_resultados', 'user_wods_libres', 'user_nombre', 'user_genero']);
     } catch (e) {}
   };
@@ -153,12 +331,14 @@ export function AppProvider({ children }) {
           resultado: data.resultado,
           notas: data.notas,
           fecha: data.fecha,
+          rx: data.rx !== false,
+          adaptacion: data.adaptacion || null,
         });
         // Publicar en feed social
         await supabase.from('feed_actividad').insert({
           user_id: user.id,
           tipo: 'wod_completado',
-          data: { dia: key, resultado: data.resultado, notas: data.notas },
+          data: { dia: key, resultado: data.resultado, notas: data.notas, rx: data.rx !== false },
         });
       }
     } catch (e) {}
@@ -211,7 +391,10 @@ export function AppProvider({ children }) {
       rms, saveRM,
       resultados, saveResultado,
       wodsLibres, saveWodLibre, deleteWodLibre,
-      userProfile, loadingProfile, loadUserProfile,
+      userProfile, loadingProfile, loadUserProfile, onboardingCompleted,
+      partnerProfile, partnerResultados,
+      partnerRequest, sentPartnerRequest,
+      sendPartnerRequest, acceptPartnerRequest, rejectPartnerRequest, cancelPartnerRequest, removePartner,
       isAdmin, isCoach, isAtleta,
       logout, completeOnboarding,
     }}>

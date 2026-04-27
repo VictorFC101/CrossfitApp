@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { plan as defaultPlan } from './data';
+import { plan as legacyDefaultPlan } from './data';
 import { parseDateFromDay } from './dateUtils';
 
 const ProgramContext = createContext();
@@ -95,17 +95,16 @@ export function ProgramProvider({ children }) {
       const stored = await AsyncStorage.getItem('all_programs');
       let allPrograms = stored ? JSON.parse(stored) : [];
 
-      // Si no hay programas guardados, usar el de data.js como base
-      if (allPrograms.length === 0) {
-        const base = { ...defaultPlan, id: 'default', name: null };
-        allPrograms = [base];
+      // Migración: eliminar el programa por defecto antiguo (Marzo 2026) sin reemplazarlo
+      if (allPrograms.some(p => p.id === 'default' && p.weeks?.[0]?.days?.[0]?.day?.includes('30 Mar'))) {
+        allPrograms = allPrograms.filter(p => p.id !== 'default');
         await AsyncStorage.setItem('all_programs', JSON.stringify(allPrograms));
       }
 
       setPrograms(allPrograms.map(enrichProgram));
     } catch (e) {
       console.error('Error loading programs:', e);
-      setPrograms([enrichProgram({ ...defaultPlan, id: 'default' })]);
+      setPrograms([]);
     } finally {
       setLoading(false);
     }

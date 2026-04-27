@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Image, Alert } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import AdminScreen from './AdminScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,6 +9,7 @@ import { useApp } from '../AppContext';
 import { useTheme, ACCENTS, FONT_SCALES } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { useNotifications, REMINDER_HOURS } from '../NotificationContext';
+import { useSocial } from '../SocialContext';
 import { parseDateFromDay } from '../dateUtils';
 import { supabase } from '../supabase';
 import { RM_MOVEMENTS } from '../constants';
@@ -36,9 +37,13 @@ function getProgramInfo(plan) {
 }
 
 export default function ProfileScreen() {
-  const { rms, resultados, userProfile, logout, loadUserProfile } = useApp();
+  const { rms, resultados, userProfile, logout, loadUserProfile,
+    partnerProfile, partnerRequest, sentPartnerRequest,
+    sendPartnerRequest, acceptPartnerRequest, rejectPartnerRequest, cancelPartnerRequest, removePartner,
+  } = useApp();
   const t = useTheme();
   const { reminderEnabled, reminderHour, scheduleWodReminder, cancelWodReminder } = useNotifications();
+  const { amistades, myUserId } = useSocial();
   const { activeProgram } = useProgram();
   const plan = activeProgram;
   const [nombre, setNombre] = useState('');
@@ -353,6 +358,104 @@ export default function ProfileScreen() {
           </Text>
           <Text style={{ fontSize: t.fs(11), color: t.text2 }}>{programInfo.range} · En pareja</Text>
           <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 2 }}>{programInfo.subtitle}</Text>
+        </View>
+
+        {/* MI PAREJA */}
+        <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>🤝 MI PAREJA</Text>
+        <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+
+          {/* SOLICITUD RECIBIDA */}
+          {!partnerProfile && partnerRequest && (
+            <View style={{ backgroundColor: t.accent + '10', borderWidth: 1, borderColor: t.accent + '40', borderRadius: 10, padding: 14, marginBottom: 12 }}>
+              <Text style={{ fontSize: t.fs(10), color: t.accent, fontWeight: '700', letterSpacing: 1, marginBottom: 8 }}>🤝 SOLICITUD DE PAREJA</Text>
+              <Text style={{ fontSize: t.fs(13), color: t.text, fontWeight: '700', marginBottom: 12 }}>
+                {partnerRequest.solicitante?.nombre || 'Alguien'} quiere entrenar contigo como pareja
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity onPress={async () => {
+                    const res = await acceptPartnerRequest(partnerRequest.id);
+                    if (!res?.success) Alert.alert('Error', res?.error || 'No se pudo aceptar. Asegúrate de ejecutar la migración SQL en Supabase.');
+                  }}
+                  style={{ flex: 1, backgroundColor: t.accent, borderRadius: 8, padding: 10, alignItems: 'center' }}>
+                  <Text style={{ fontSize: t.fs(12), color: '#fff', fontWeight: '900' }}>✓ Aceptar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => rejectPartnerRequest(partnerRequest.id)}
+                  style={{ flex: 1, backgroundColor: '#e6394420', borderWidth: 1, borderColor: '#e6394440', borderRadius: 8, padding: 10, alignItems: 'center' }}>
+                  <Text style={{ fontSize: t.fs(12), color: '#e63946', fontWeight: '900' }}>✕ Rechazar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* PAREJA ACTIVA */}
+          {partnerProfile ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: t.accent + '20', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: t.fs(16), fontWeight: '900', color: t.accent }}>
+                  {partnerProfile.nombre?.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase() || '??'}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: t.fs(15), fontWeight: '900', color: t.text }}>{partnerProfile.nombre}</Text>
+                <Text style={{ fontSize: t.fs(10), color: '#52b788', marginTop: 2 }}>✓ Pareja activa</Text>
+              </View>
+              <TouchableOpacity onPress={removePartner}
+                style={{ backgroundColor: '#e6394420', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#e6394440' }}>
+                <Text style={{ fontSize: t.fs(11), color: '#e63946', fontWeight: '700' }}>Disolver</Text>
+              </TouchableOpacity>
+            </View>
+
+          ) : sentPartnerRequest ? (
+            /* SOLICITUD ENVIADA — esperando */
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: t.bg4, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: t.fs(20) }}>⏳</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>
+                  {sentPartnerRequest.receptor?.nombre || 'Tu solicitud'}
+                </Text>
+                <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: 2 }}>Solicitud enviada · Esperando respuesta</Text>
+              </View>
+              <TouchableOpacity onPress={() => cancelPartnerRequest(sentPartnerRequest.id)}
+                style={{ backgroundColor: t.bg4, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: t.border }}>
+                <Text style={{ fontSize: t.fs(10), color: t.text3, fontWeight: '700' }}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+
+          ) : (
+            /* SIN PAREJA — lista de amigos */
+            <>
+              <Text style={{ fontSize: t.fs(12), color: t.text3, marginBottom: 12, lineHeight: t.fs(18) }}>
+                Elige un amigo como pareja de entrenamiento. Recibirá una solicitud para confirmar.
+              </Text>
+              {amistades.length === 0 ? (
+                <Text style={{ fontSize: t.fs(12), color: t.text3, textAlign: 'center', fontStyle: 'italic' }}>
+                  Añade amigos en Social para poder enviar una solicitud de pareja
+                </Text>
+              ) : (
+                amistades.map((a, i) => {
+                  const amigo = a.solicitante?.id === myUserId ? a.receptor : a.solicitante;
+                  if (!amigo) return null;
+                  return (
+                    <TouchableOpacity key={i} onPress={async () => {
+                        const res = await sendPartnerRequest(amigo.id, amigo.nombre || amigo.email);
+                        if (!res?.success) Alert.alert('Error', res?.error || 'No se pudo enviar la solicitud. Asegúrate de que la función está activada en el servidor.');
+                      }}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, marginBottom: 8 }}>
+                      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: t.accent + '20', alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: t.accent }}>
+                          {(amigo.nombre || amigo.email || '?').split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase()}
+                        </Text>
+                      </View>
+                      <Text style={{ flex: 1, fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{amigo.nombre || amigo.email}</Text>
+                      <Text style={{ fontSize: t.fs(11), color: t.accent, fontWeight: '700' }}>Enviar solicitud →</Text>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </>
+          )}
         </View>
 
         {/* NOTIFICACIONES */}

@@ -275,13 +275,15 @@ function WodCreator({ visible, onClose, onSave }) {
 }
 
 export default function HistorialScreen() {
-  const { resultados, rms, saveResultado, wodsLibres, saveWodLibre, deleteWodLibre } = useApp();
+  const { resultados, rms, saveResultado, wodsLibres, saveWodLibre, deleteWodLibre, partnerProfile, partnerResultados } = useApp();
   const t = useTheme();
   const { activeProgram } = useProgram();
   const { feed, esAmigo } = useSocial();
   const [expanded, setExpanded] = useState(null);
   const [tab, setTab] = useState('yo');
   const [showCreator, setShowCreator] = useState(false);
+  const [filterTipo, setFilterTipo] = useState(null);
+  const [filterFormato, setFilterFormato] = useState(null);
 
   const allDays = activeProgram
     ? activeProgram.weeks.flatMap((w, wi) =>
@@ -293,6 +295,19 @@ export default function HistorialScreen() {
 
   const diasConResultado = allDays.filter(d => resultados[d.day]);
   const diasSinResultado = allDays.filter(d => !resultados[d.day] && d.type !== 'Libre');
+
+  const tiposEnPrograma = [...new Set(allDays.map(d => d.type).filter(Boolean))];
+
+  const diasFiltrados = diasConResultado.filter(day => {
+    if (filterTipo && day.type !== filterTipo) return false;
+    if (filterFormato) {
+      const r = resultados[day.day]?.resultado || '';
+      const segs = r.split(' · ');
+      if (filterFormato === 'tiempo' && !segs.find(s => /^\d{1,2}:\d{2}$/.test(s.trim()))) return false;
+      if (filterFormato === 'rondas' && !segs.find(s => /^\d+\+\d+$/.test(s.trim()))) return false;
+    }
+    return true;
+  });
 
   // Resultados de amigos agrupados por día (desde feed real)
   const companerosPorDia = {};
@@ -332,18 +347,54 @@ export default function HistorialScreen() {
       </View>
 
       {/* TABS */}
-      <View style={{ flexDirection: 'row', gap: 8, padding: 12, backgroundColor: t.header, borderBottomWidth: 1, borderBottomColor: t.border }}>
+      <View style={{ flexDirection: 'row', gap: 8, padding: 12, backgroundColor: t.header, borderBottomWidth: tab === 'yo' ? 0 : 1, borderBottomColor: t.border }}>
         {[
           { key: 'yo', label: '👤 MIS RESULTADOS' },
           { key: 'libres', label: `🔓 LIBRES (${wodsLibres.length})` },
           { key: 'companeros', label: '👥 COMPAÑEROS' }
         ].map(tb => (
-          <TouchableOpacity key={tb.key} onPress={() => setTab(tb.key)}
+          <TouchableOpacity key={tb.key} onPress={() => { setTab(tb.key); setFilterTipo(null); setFilterFormato(null); }}
             style={{ flex: 1, padding: 8, backgroundColor: tab === tb.key ? t.accent + '20' : t.bg4, borderWidth: 1, borderColor: tab === tb.key ? t.accent : t.border, borderRadius: 8, alignItems: 'center' }}>
             <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: tab === tb.key ? t.accent : t.text3 }}>{tb.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* FILTROS — solo en tab yo */}
+      {tab === 'yo' && (
+        <View style={{ backgroundColor: t.header, borderBottomWidth: 1, borderBottomColor: t.border, paddingHorizontal: 12, paddingBottom: 10 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              <TouchableOpacity onPress={() => setFilterTipo(null)}
+                style={{ paddingHorizontal: 12, paddingVertical: 5, backgroundColor: !filterTipo ? t.accent + '25' : t.bg4, borderWidth: 1, borderColor: !filterTipo ? t.accent : t.border, borderRadius: 20 }}>
+                <Text style={{ fontSize: t.fs(10), fontWeight: '700', color: !filterTipo ? t.accent : t.text3 }}>Todos</Text>
+              </TouchableOpacity>
+              {tiposEnPrograma.map(tipo => {
+                const color = typeColors[tipo] || t.accent;
+                const active = filterTipo === tipo;
+                return (
+                  <TouchableOpacity key={tipo} onPress={() => setFilterTipo(active ? null : tipo)}
+                    style={{ paddingHorizontal: 12, paddingVertical: 5, backgroundColor: active ? color + '25' : t.bg4, borderWidth: 1, borderColor: active ? color : t.border, borderRadius: 20 }}>
+                    <Text style={{ fontSize: t.fs(10), fontWeight: '700', color: active ? color : t.text3 }}>{tipo}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </ScrollView>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {[
+              { key: null, label: '⚡ Todos' },
+              { key: 'tiempo', label: '⏱ Tiempo' },
+              { key: 'rondas', label: '🔄 Rondas' },
+            ].map(f => (
+              <TouchableOpacity key={String(f.key)} onPress={() => setFilterFormato(filterFormato === f.key ? null : f.key)}
+                style={{ paddingHorizontal: 10, paddingVertical: 4, backgroundColor: filterFormato === f.key ? t.accent + '20' : t.bg4, borderWidth: 1, borderColor: filterFormato === f.key ? t.accent : t.border, borderRadius: 6 }}>
+                <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: filterFormato === f.key ? t.accent : t.text3 }}>{f.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
 
       <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 60 }}>
 
@@ -358,7 +409,18 @@ export default function HistorialScreen() {
               </View>
             )}
 
-            {diasConResultado.map((day, i) => {
+            {diasConResultado.length > 0 && diasFiltrados.length === 0 && (
+              <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 24, alignItems: 'center', marginTop: 20 }}>
+                <Text style={{ fontSize: t.fs(28), marginBottom: 10 }}>🔍</Text>
+                <Text style={{ fontSize: t.fs(14), fontWeight: '900', color: t.text, marginBottom: 6 }}>Sin resultados con estos filtros</Text>
+                <TouchableOpacity onPress={() => { setFilterTipo(null); setFilterFormato(null); }}
+                  style={{ marginTop: 8, backgroundColor: t.accent + '20', borderWidth: 1, borderColor: t.accent, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 }}>
+                  <Text style={{ fontSize: t.fs(11), fontWeight: '700', color: t.accent }}>Quitar filtros</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {diasFiltrados.map((day, i) => {
               const res = resultados[day.day];
               const isOpen = expanded === day.day;
               const accent = typeColors[day.type] || t.accent;
@@ -424,6 +486,29 @@ export default function HistorialScreen() {
                               {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text3 }}>· {m.weight}</Text>}
                             </View>
                           ))}
+                        </View>
+                      )}
+
+                      {partnerProfile && partnerResultados[day.day] && (
+                        <View style={{ backgroundColor: accent + '08', borderWidth: 1, borderColor: accent + '30', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                          <Text style={{ fontSize: t.fs(10), color: accent, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>🤝 TU PAREJA</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: accent + '20', alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: accent }}>
+                                {partnerProfile.nombre?.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase() || '??'}
+                              </Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{partnerProfile.nombre}</Text>
+                              <View style={{ marginTop: 2, alignSelf: 'flex-start', backgroundColor: partnerResultados[day.day].rx ? accent + '20' : '#f4a26120', borderRadius: 3, paddingHorizontal: 5, paddingVertical: 1 }}>
+                                <Text style={{ fontSize: t.fs(7), color: partnerResultados[day.day].rx ? accent : '#f4a261', fontWeight: '700' }}>{partnerResultados[day.day].rx ? 'Rx' : 'Scaled'}</Text>
+                              </View>
+                            </View>
+                            <Text style={{ fontSize: t.fs(18), fontWeight: '900', color: accent }}>{partnerResultados[day.day].resultado || '—'}</Text>
+                          </View>
+                          {!!partnerResultados[day.day].notas && (
+                            <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 8, fontStyle: 'italic' }}>"{partnerResultados[day.day].notas}"</Text>
+                          )}
                         </View>
                       )}
 

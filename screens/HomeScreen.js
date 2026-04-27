@@ -1,9 +1,11 @@
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { useState, useEffect } from 'react';
 import { typeColors } from '../data';
 import { useTheme } from '../ThemeContext';
-import { useProgram } from '../ProgramContext';
-import { parseDateFromDay, isToday, isPast, getInitialIdx, isTodayInProgram, getToday } from '../dateUtils';
+import { useProgram, getProgramDateRange } from '../ProgramContext';
+import { useNotifications } from '../NotificationContext';
+import { supabase } from '../supabase';
+import { parseDateFromDay, isToday, isPast, getInitialIdx, isTodayInProgram, getToday, assignDatesFromStart } from '../dateUtils';
 
 const DIAS = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
 
@@ -174,10 +176,106 @@ function FreeDayToday({ navigate }) {
 
 export default function HomeScreen({ navigate }) {
   const t = useTheme();
-  const { activeProgram, loading } = useProgram();
+  const { activeProgram, loading, addProgram, deleteProgram, programs } = useProgram();
+  const { notifications, markAsRead } = useNotifications();
+  const [processingAssign, setProcessingAssign] = useState(false);
+  const [hasActiveAsignacion, setHasActiveAsignacion] = useState(null); // null = checking
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) { setHasActiveAsignacion(false); return; }
+      supabase.from('asignaciones')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('status', 'activo')
+        .limit(1)
+        .then(({ data }) => setHasActiveAsignacion(!!(data && data.length > 0)));
+    });
+  }, []);
+
+  const pendingNotif = notifications.find(n => n.tipo === 'programa_asignado' && !n.leida);
+
+  const handleAcceptProgram = async () => {
+    if (!pendingNotif) return;
+    setProcessingAssign(true);
+    try {
+      const { start_date, programa_id } = pendingNotif.data;
+
+      // Fetch programa completo desde Supabase para evitar datos truncados en notificación
+      const { data: progRow, error: fetchErr } = await supabase
+        .from('programas')
+        .select('data')
+        .eq('id', programa_id)
+        .single();
+      if (fetchErr || !progRow?.data) throw new Error('No se pudo cargar el programa desde el servidor');
+      const programa = progRow.data;
+
+      const shifted = start_date ? assignDatesFromStart(programa, start_date) : programa;
+
+      // Eliminar programas locales que solapen con el nuevo antes de añadirlo
+      const { start: newStart, end: newEnd } = getProgramDateRange(shifted);
+      if (newStart && newEnd) {
+        for (const p of programs) {
+          const { start, end } = getProgramDateRange(p);
+          if (start && end && newStart <= end && newEnd >= start) {
+            await deleteProgram(p.id);
+          }
+        }
+      }
+
+      const result = await addProgram(shifted);
+      if (!result.success) { Alert.alert('Error', result.error); return; }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('asignaciones')
+          .update({ status: 'activo' })
+          .eq('user_id', user.id)
+          .eq('programa_id', programa_id)
+          .eq('status', 'pendiente');
+      }
+      await markAsRead(pendingNotif.id);
+      setHasActiveAsignacion(true);
+      Alert.alert('✅ Programa aceptado', 'El programa ha sido añadido a tu calendario.');
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setProcessingAssign(false);
+    }
+  };
+
+  const handleRejectProgram = async () => {
+    if (!pendingNotif) return;
+    Alert.alert(
+      'Rechazar programa',
+      '¿Seguro que quieres rechazar este programa?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Rechazar', style: 'destructive', onPress: async () => {
+          setProcessingAssign(true);
+          try {
+            const { programa_id } = pendingNotif.data;
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              await supabase.from('asignaciones')
+                .update({ status: 'rechazado' })
+                .eq('user_id', user.id)
+                .eq('programa_id', programa_id)
+                .eq('status', 'pendiente');
+            }
+            await markAsRead(pendingNotif.id);
+          } catch (e) {
+            Alert.alert('Error', e.message);
+          } finally {
+            setProcessingAssign(false);
+          }
+        }}
+      ]
+    );
+  };
 
   // Calcular allDays desde el programa activo
-  const plan = activeProgram;
+  // Solo mostrar si tiene fechas reales Y hay una asignación activa en Supabase
+  const plan = (activeProgram?._meta?.start && hasActiveAsignacion) ? activeProgram : null;
   const allDays = plan ? plan.weeks.flatMap((w, wi) =>
     w.days.map((d, di) => ({ ...d, weekIndex: wi, dayIndex: di, weekNumber: w.number, weekFocus: w.focus }))
   ) : [];
@@ -195,10 +293,41 @@ export default function HomeScreen({ navigate }) {
     setShowFreeDay(!isTodayInProgram(allDays));
   }
 
-  if (loading || !plan || allDays.length === 0) {
+  if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: t.text3, fontSize: t.fs(12), letterSpacing: 2 }}>CARGANDO PROGRAMA...</Text>
+        <Text style={{ color: t.text3, fontSize: t.fs(12), letterSpacing: 2 }}>CARGANDO...</Text>
+      </View>
+    );
+  }
+
+  if (!plan || allDays.length === 0) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.bg }}>
+        {pendingNotif && (
+          <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.accent + '40', borderRadius: 12, margin: 16, padding: 16 }}>
+            <Text style={{ fontSize: t.fs(10), color: t.accent, fontWeight: '700', letterSpacing: 2, marginBottom: 6 }}>📬 PROGRAMA PENDIENTE</Text>
+            <Text style={{ fontSize: t.fs(14), fontWeight: '900', color: t.text, marginBottom: 4 }}>{pendingNotif.data?.programa?.name || 'Nuevo programa'}</Text>
+            <Text style={{ fontSize: t.fs(11), color: t.text3, marginBottom: 14 }}>Tu coach te ha asignado un programa. ¿Lo aceptas?</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity onPress={handleRejectProgram} disabled={processingAssign}
+                style={{ flex: 1, backgroundColor: '#e6394415', borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#e6394430' }}>
+                <Text style={{ color: '#e63946', fontWeight: '700', fontSize: t.fs(12) }}>✕ RECHAZAR</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleAcceptProgram} disabled={processingAssign}
+                style={{ flex: 2, backgroundColor: t.accent, borderRadius: 10, padding: 12, alignItems: 'center' }}>
+                <Text style={{ color: '#fff', fontWeight: '900', fontSize: t.fs(12) }}>✓ ACEPTAR PROGRAMA</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30 }}>
+          <Text style={{ fontSize: 48, marginBottom: 16 }}>📋</Text>
+          <Text style={{ fontSize: t.fs(18), fontWeight: '900', color: t.text, textAlign: 'center', marginBottom: 8 }}>Sin programa activo</Text>
+          <Text style={{ fontSize: t.fs(12), color: t.text3, textAlign: 'center', lineHeight: t.fs(18) }}>
+            Tu coach te asignará un programa. Cuando lo aceptes aparecerá aquí.
+          </Text>
+        </View>
       </View>
     );
   }
@@ -261,6 +390,34 @@ export default function HomeScreen({ navigate }) {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+        {/* Banner de programa pendiente de aceptación */}
+        {pendingNotif && (
+          <View style={{ margin: 12, marginBottom: 0, backgroundColor: '#4895ef12', borderWidth: 2, borderColor: '#4895ef50', borderRadius: 14, padding: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <Text style={{ fontSize: 20 }}>📋</Text>
+              <Text style={{ fontSize: t.fs(9), fontWeight: '900', color: '#4895ef', letterSpacing: 2 }}>NUEVO PROGRAMA ASIGNADO</Text>
+            </View>
+            <Text style={{ fontSize: t.fs(15), fontWeight: '900', color: t.text, marginBottom: 2 }}>
+              {pendingNotif.data?.programa?._meta?.title || pendingNotif.data?.programa?.name || 'Programa'}
+            </Text>
+            <Text style={{ fontSize: t.fs(11), color: t.text3, marginBottom: 12 }}>
+              Inicio: {pendingNotif.data?.start_date} · De: {pendingNotif.data?.coach_nombre || 'tu coach'}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity onPress={handleRejectProgram} disabled={processingAssign}
+                style={{ flex: 1, backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 10, padding: 11, alignItems: 'center' }}>
+                <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: t.text3 }}>✕ Rechazar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleAcceptProgram} disabled={processingAssign}
+                style={{ flex: 2, backgroundColor: '#4895ef', borderRadius: 10, padding: 11, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+                {processingAssign
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={{ fontSize: t.fs(13), fontWeight: '900', color: '#fff' }}>✅ Aceptar programa</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {showCalendar && (
           <View style={{ padding: 12 }}>
             <MiniCalendar currentIdx={currentIdx} allDays={allDays} onSelect={(idx) => { setCurrentIdx(idx); setShowCalendar(false); setShowFreeDay(false); }} />
@@ -389,21 +546,82 @@ export default function HomeScreen({ navigate }) {
                   </Section>
                 )}
 
-                <Section title={`⚡ WOD — ${day.wod?.type || ''} ${day.wod?.duration || ''}`} accent={t.accent} defaultOpen={true}>
-                  {day.wod?.formatNote && (
-                    <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 10 }}>
-                      <Text style={{ fontSize: t.fs(10), color: t.text2 }}>⚡ {day.wod.format} — {day.wod.formatNote}</Text>
-                    </View>
-                  )}
-                  {day.wod?.movements?.map((m, i) => (
-                    <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent, borderRadius: 8, padding: 10, marginBottom: 6 }}>
-                      <Text style={{ minWidth: 38, fontSize: t.fs(13), fontWeight: '700', color: t.accent }}>{m.reps}</Text>
-                      <View>
-                        <Text style={{ fontSize: t.fs(14), fontWeight: '700', color: t.text }}>{m.name}</Text>
-                        {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(10), color: t.text2, marginTop: 2 }}>{m.weight}</Text>}
+                <Section title={`⚡ WOD${day.wod?.parts ? ' — DOBLE WOD' : day.wod?.type ? ` — ${day.wod.type} ${day.wod.duration || ''}` : ''}`} accent={t.accent} defaultOpen={true}>
+                  {/* WOD con múltiples partes */}
+                  {day.wod?.parts ? day.wod.parts.map((part, pi) => (
+                    <View key={pi} style={{ marginBottom: pi < day.wod.parts.length - 1 ? 14 : 0 }}>
+                      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                        <View style={{ backgroundColor: t.accent + '20', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 }}>
+                          <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: t.accent }}>WOD {pi + 1} · {part.type} · {part.duration}</Text>
+                        </View>
+                        {part.format && <View style={{ backgroundColor: t.bg4, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 }}>
+                          <Text style={{ fontSize: t.fs(9), color: t.text2 }}>{part.format}</Text>
+                        </View>}
                       </View>
+                      {part.formatNote && (
+                        <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 8 }}>
+                          <Text style={{ fontSize: t.fs(11), color: t.text2 }}>{part.formatNote}</Text>
+                        </View>
+                      )}
+                      {part.movements?.filter(m => m.name !== '—').map((m, i) => (
+                        <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent, borderRadius: 8, padding: 10, marginBottom: 6 }}>
+                          <Text style={{ minWidth: 38, fontSize: t.fs(13), fontWeight: '700', color: t.accent }}>{m.reps}</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: t.fs(14), fontWeight: '700', color: t.text }}>{m.name}</Text>
+                            {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(10), color: t.text2, marginTop: 2 }}>{m.weight}</Text>}
+                          </View>
+                        </View>
+                      ))}
+                      {pi < day.wod.parts.length - 1 && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                          <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
+                          <Text style={{ fontSize: t.fs(9), color: t.text3, fontWeight: '700', letterSpacing: 2 }}>2 MIN DESCANSO</Text>
+                          <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
+                        </View>
+                      )}
                     </View>
-                  ))}
+                  )) : null}
+
+                  {/* WOD EMOM */}
+                  {!day.wod?.parts && day.wod?.emomMinutes && (
+                    <>
+                      {day.wod.formatNote && (
+                        <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 8 }}>
+                          <Text style={{ fontSize: t.fs(11), color: t.text2 }}>{day.wod.formatNote}</Text>
+                        </View>
+                      )}
+                      {day.wod.emomMinutes.map((min, i) => (
+                        <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent, borderRadius: 8, padding: 10, marginBottom: 6 }}>
+                          <Text style={{ minWidth: 52, fontSize: t.fs(10), fontWeight: '700', color: t.accent }}>{min.min}</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{min.work}</Text>
+                            {min.weight && min.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 2 }}>{min.weight}</Text>}
+                          </View>
+                        </View>
+                      ))}
+                    </>
+                  )}
+
+                  {/* WOD estándar con movements */}
+                  {!day.wod?.parts && !day.wod?.emomMinutes && (
+                    <>
+                      {day.wod?.formatNote && (
+                        <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 10 }}>
+                          <Text style={{ fontSize: t.fs(10), color: t.text2 }}>⚡ {day.wod.format} — {day.wod.formatNote}</Text>
+                        </View>
+                      )}
+                      {day.wod?.movements?.map((m, i) => (
+                        <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent, borderRadius: 8, padding: 10, marginBottom: 6 }}>
+                          <Text style={{ minWidth: 38, fontSize: t.fs(13), fontWeight: '700', color: t.accent }}>{m.reps}</Text>
+                          <View>
+                            <Text style={{ fontSize: t.fs(14), fontWeight: '700', color: t.text }}>{m.name}</Text>
+                            {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(10), color: t.text2, marginTop: 2 }}>{m.weight}</Text>}
+                          </View>
+                        </View>
+                      ))}
+                    </>
+                  )}
+
                   {day.wod?.gymNote && (
                     <View style={{ backgroundColor: t.dark ? '#080f08' : '#e8f5e9', borderWidth: 1, borderColor: t.dark ? '#1e3e1e' : '#c8e6c9', borderRadius: 6, padding: 8, marginTop: 4 }}>
                       <Text style={{ fontSize: t.fs(11), color: '#5a9a5a' }}>💡 {day.wod.gymNote}</Text>

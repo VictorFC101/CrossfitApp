@@ -105,7 +105,7 @@ const handleAssign = async () => {
           .from('asignaciones')
           .select('*, programas(name)')
           .eq('user_id', u.id)
-          .neq('status', 'rechazado');
+          .eq('status', 'activo');
 
         if (existing?.length) {
           for (const asig of existing) {
@@ -132,6 +132,17 @@ const handleAssign = async () => {
           [{ text: 'Entendido' }]
         );
       }
+
+      // Asegurar que el programa existe en Supabase antes de insertar FK
+      await supabase.from('programas').upsert({
+        id: selectedProgram.id,
+        name: selectedProgram._meta?.title || selectedProgram.name || 'Programa',
+        data: selectedProgram,
+        start_date: selectedProgram._meta?.start?.toISOString() || null,
+        end_date: selectedProgram._meta?.end?.toISOString() || null,
+        status: selectedProgram._meta?.status || 'activo',
+        updated_at: new Date().toISOString(),
+      });
 
       // Sin conflictos — crear asignaciones
       const asignaciones = selectedUsers.map(u => ({

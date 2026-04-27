@@ -4,6 +4,16 @@ import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { getInitialIdx, isTodayInProgram } from '../dateUtils';
 
+const parseMins = (str) => {
+  const m = str?.match(/(\d+)\s*min/i);
+  return m ? parseInt(m[1]) : null;
+};
+
+const parseEmom = (str) => {
+  const m = str?.match(/(\d+)[''´']?\s*[×xX]\s*(\d+)/i);
+  return m ? { interval: m[1], rounds: m[2] } : null;
+};
+
 export default function TimerScreen() {
   const t = useTheme();
   const { activeProgram } = useProgram();
@@ -27,7 +37,49 @@ export default function TimerScreen() {
   const [rounds, setRounds] = useState(0);
   const [currentEmomRound, setCurrentEmomRound] = useState(1);
   const [editing, setEditing] = useState(false);
+  const [synced, setSynced] = useState(false);
   const intervalRef = useRef(null);
+  const autoSynced = useRef(false);
+
+  // Auto-sincronizar timer con el WOD del día (solo una vez al cargar)
+  useEffect(() => {
+    if (autoSynced.current || !todayDay?.wod?.type) return;
+    const { type, duration } = todayDay.wod;
+    const typeUpper = (type || '').toUpperCase();
+
+    if (typeUpper.includes('AMRAP')) {
+      const mins = parseMins(duration);
+      setMode('AMRAP');
+      if (mins) { setCustomMins(String(mins)); setSeconds(mins * 60); }
+      setRounds(0);
+      setRunning(false);
+      autoSynced.current = true;
+      setSynced(true);
+    } else if (typeUpper.includes('EMOM')) {
+      const emom = parseEmom(duration);
+      setMode('EMOM');
+      if (emom) {
+        setEmomMins(emom.interval);
+        setEmomRounds(emom.rounds);
+        setSeconds(parseInt(emom.interval) * 60);
+      } else {
+        const mins = parseMins(duration);
+        if (mins) { setEmomMins('1'); setEmomRounds(String(mins)); setSeconds(60); }
+      }
+      setCurrentEmomRound(1);
+      setRunning(false);
+      autoSynced.current = true;
+      setSynced(true);
+    } else if (typeUpper.includes('FOR TIME') || typeUpper.includes('TIMECAP') || typeUpper.includes('TIME CAP')) {
+      const mins = parseMins(duration);
+      setMode('FOR TIME');
+      if (mins) { setCustomMins(String(mins)); setSeconds(mins * 60); }
+      setRounds(0);
+      setRunning(false);
+      autoSynced.current = true;
+      setSynced(true);
+    }
+  }, [todayDay]);
 
   const totalRounds = parseInt(emomRounds || '10');
   const emomRoundSecs = parseInt(emomMins || '1') * 60;
@@ -214,7 +266,14 @@ export default function TimerScreen() {
 
         <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 14, width: '100%' }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2 }}>WOD HOY</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2 }}>WOD HOY</Text>
+              {synced && (
+                <View style={{ backgroundColor: accentColor + '20', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                  <Text style={{ fontSize: t.fs(8), color: accentColor, fontWeight: '700', letterSpacing: 1 }}>⚡ SINCRONIZADO</Text>
+                </View>
+              )}
+            </View>
             {todayDay && (
               <Text style={{ fontSize: t.fs(9), color: accentColor, fontWeight: '700', letterSpacing: 1 }}>
                 {todayDay.wod?.type} · {todayDay.wod?.duration}
