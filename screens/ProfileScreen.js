@@ -407,19 +407,25 @@ export default function ProfileScreen() {
 
           ) : sentPartnerRequest ? (
             /* SOLICITUD ENVIADA — esperando */
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: t.bg4, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: t.fs(20) }}>⏳</Text>
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: t.bg4, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: t.fs(20) }}>⏳</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>
+                    {sentPartnerRequest.receptor?.nombre || 'Tu solicitud'}
+                  </Text>
+                  <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: 2 }}>Solicitud enviada · Esperando respuesta</Text>
+                </View>
+                <TouchableOpacity onPress={() => cancelPartnerRequest(sentPartnerRequest.id)}
+                  style={{ backgroundColor: t.bg4, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: t.border }}>
+                  <Text style={{ fontSize: t.fs(10), color: t.text3, fontWeight: '700' }}>Cancelar</Text>
+                </TouchableOpacity>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>
-                  {sentPartnerRequest.receptor?.nombre || 'Tu solicitud'}
-                </Text>
-                <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: 2 }}>Solicitud enviada · Esperando respuesta</Text>
-              </View>
-              <TouchableOpacity onPress={() => cancelPartnerRequest(sentPartnerRequest.id)}
-                style={{ backgroundColor: t.bg4, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: t.border }}>
-                <Text style={{ fontSize: t.fs(10), color: t.text3, fontWeight: '700' }}>Cancelar</Text>
+              <TouchableOpacity onPress={() => loadUserProfile(userProfile?.id)}
+                style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: t.bg4, borderRadius: 8, padding: 8 }}>
+                <Text style={{ fontSize: t.fs(11), color: t.accent, fontWeight: '700' }}>🔄 Verificar si fue aceptada</Text>
               </TouchableOpacity>
             </View>
 
