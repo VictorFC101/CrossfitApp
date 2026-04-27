@@ -29,7 +29,7 @@ function typeColor(type, fallback) {
 }
 
 // ── Tarjeta de resultados para compartir ──────────────────────
-function ShareCard({ day, resultado, notas, acento }) {
+function ShareCard({ day, resultado, notas, rx, acento }) {
   const now = new Date();
   const dateStr = `${now.getDate()} ${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
   const movements = day?.wod?.movements?.filter(m => m.name !== '—') || [];
@@ -92,9 +92,10 @@ function ShareCard({ day, resultado, notas, acento }) {
       <Text style={{ fontSize: 10, color: acento, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>
         ✅  MI RESULTADO
       </Text>
-      <Text style={{ fontSize: 32, fontWeight: '900', color: '#fff', letterSpacing: 1 }}>
-        {resultado}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
+        <Text style={{ fontSize: 32, fontWeight: '900', color: '#fff', letterSpacing: 1 }}>{resultado}</Text>
+        <Text style={{ fontSize: 11, fontWeight: '700', color: rx ? '#52b788' : '#f4a261', letterSpacing: 1 }}>{rx ? 'Rx' : 'Scaled'}</Text>
+      </View>
       {!!notas && (
         <Text style={{ fontSize: 12, color: '#ffffff70', marginTop: 8, fontStyle: 'italic', lineHeight: 18 }}>
           "{notas}"
@@ -111,6 +112,17 @@ function ShareCard({ day, resultado, notas, acento }) {
   );
 }
 
+function detectFormat(wod) {
+  if (!wod) return 'text';
+  if (wod.emomMinutes) return 'emom';
+  if (wod.parts) return 'parts';
+  const f = (wod.format || '').toUpperCase();
+  if (f.includes('AMRAP')) return 'amrap';
+  if (f.includes('FOR TIME') || f.includes('TIEMPO')) return 'fortime';
+  if (f.includes('MAX')) return 'maxreps';
+  return 'text';
+}
+
 // ─────────────────────────────────────────────────────────────
 export default function WodScreen({ navigate }) {
   const { rms, resultados, saveResultado } = useApp();
@@ -118,6 +130,11 @@ export default function WodScreen({ navigate }) {
   const { activeProgram } = useProgram();
   const [resultado, setResultado] = useState('');
   const [notas, setNotas]         = useState('');
+  const [rx, setRx]               = useState(true);
+  const [rondas, setRondas]       = useState('');
+  const [repsExtra, setRepsExtra] = useState('');
+  const [minutos, setMinutos]     = useState('');
+  const [segundos, setSegundos]   = useState('');
   const [saved, setSaved]         = useState(false);
   const [sharing, setSharing]     = useState(false);
   const shareCardRef              = useRef(null);
@@ -129,21 +146,48 @@ export default function WodScreen({ navigate }) {
   const day = allDaysFlat.length > 0 ? getTodayDay(allDaysFlat) : null;
 
   useEffect(() => {
-    if (day && resultados[day.day]) {
-      setResultado(resultados[day.day].resultado || '');
-      setNotas(resultados[day.day].notas || '');
+    const res = day ? resultados[day.day] : null;
+    setResultado(res?.resultado || '');
+    setNotas(res?.notas || '');
+    setRx(res?.rx !== false);
+    const fmt = detectFormat(day?.wod);
+    const r = res?.resultado || '';
+    if (fmt === 'amrap' && r.includes('+')) {
+      const [ron, rep] = r.split('+');
+      setRondas(ron || ''); setRepsExtra(rep || '');
+    } else if (fmt === 'fortime' && r.includes(':')) {
+      const [min, sec] = r.split(':');
+      setMinutos(min || ''); setSegundos(sec || '');
+    } else if ((fmt === 'emom' || fmt === 'maxreps') && r) {
+      setRondas(r.split('/')[0] || '');
+    } else {
+      setRondas(''); setRepsExtra(''); setMinutos(''); setSegundos('');
     }
   }, [day?.day]);
 
   const guardar = async () => {
     if (!day) return;
-    await saveResultado(day.day, { resultado, notas, fecha: new Date().toISOString() });
+    const fmt = detectFormat(day.wod);
+    let finalResultado = resultado;
+    if (fmt === 'amrap') {
+      finalResultado = rondas ? `${rondas}+${repsExtra || '0'}` : '';
+    } else if (fmt === 'fortime') {
+      finalResultado = minutos
+        ? `${minutos.padStart(2, '0')}:${(segundos || '00').padStart(2, '0')}`
+        : '';
+    } else if (fmt === 'emom') {
+      const total = day.wod.emomMinutes?.length || '';
+      finalResultado = rondas ? `${rondas}${total ? '/' + total : ''}` : '';
+    } else if (fmt === 'maxreps') {
+      finalResultado = rondas ? `${rondas} reps` : '';
+    }
+    await saveResultado(day.day, { resultado: finalResultado, notas, fecha: new Date().toISOString(), rx });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
   const compartir = async () => {
-    if (!resultado || !shareCardRef.current) return;
+    if (!currentResult || !shareCardRef.current) return;
     setSharing(true);
     try {
       const uri = await shareCardRef.current.capture();
@@ -159,7 +203,14 @@ export default function WodScreen({ navigate }) {
   const rmKey   = day?.rmKey || 'cj';
   const rmVal   = parseFloat(rms[rmKey]);
   const hasRM   = rmVal > 0;
-  const hasResult = !!resultado;
+
+  const fmt = detectFormat(day?.wod);
+  const currentResult = fmt === 'amrap' ? (rondas ? `${rondas}+${repsExtra || '0'}` : '')
+    : fmt === 'fortime' ? (minutos ? `${minutos.padStart(2,'0')}:${(segundos||'00').padStart(2,'0')}` : '')
+    : fmt === 'emom' ? (rondas ? `${rondas}${day?.wod?.emomMinutes?.length ? '/'+day.wod.emomMinutes.length : ''}` : '')
+    : fmt === 'maxreps' ? (rondas ? `${rondas} reps` : '')
+    : resultado;
+  const hasResult = !!currentResult;
 
   // ── NO HAY WOD HOY ──────────────────────────────────────────
   if (!todayInProgram || !day) {
@@ -200,7 +251,7 @@ export default function WodScreen({ navigate }) {
       {/* ShareCard renderizada fuera de pantalla para captura */}
       <View style={{ position: 'absolute', top: 0, left: -400 }} collapsable={false}>
         <ViewShot ref={shareCardRef} options={{ format: 'png', quality: 0.95, result: 'tmpfile' }}>
-          <ShareCard day={day} resultado={resultado} notas={notas} acento={t.accent} />
+          <ShareCard day={day} resultado={currentResult} notas={notas} rx={rx} acento={t.accent} />
         </ViewShot>
       </View>
 
@@ -380,12 +431,76 @@ export default function WodScreen({ navigate }) {
             <Text style={{ fontSize: t.fs(10), color: '#4caf50', letterSpacing: 2, fontWeight: '700' }}>✏️ ANOTAR RESULTADO</Text>
             {saved && <Text style={{ fontSize: t.fs(10), color: '#52b788', fontWeight: '700' }}>✓ GUARDADO</Text>}
           </View>
-          <TextInput
-            value={resultado} onChangeText={setResultado}
-            placeholder="Nº rondas + reps (ej: 8+3)"
-            placeholderTextColor={t.dark ? '#2a4a2e' : '#81c784'}
-            style={{ backgroundColor: t.dark ? '#080e0a' : '#fff', borderWidth: 1, borderColor: t.dark ? '#1a3a1e' : '#c8e6c9', borderRadius: 8, color: t.dark ? '#81c784' : '#2e7d32', fontSize: t.fs(14), fontWeight: '700', padding: 12, marginBottom: 10 }}
-          />
+
+          {/* Rx / Scaled */}
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+            <TouchableOpacity onPress={() => setRx(true)}
+              style={{ flex: 1, backgroundColor: rx ? '#52b78820' : t.dark ? '#080e0a' : '#fff', borderWidth: 1.5, borderColor: rx ? '#52b788' : t.dark ? '#1a3a1e' : '#c8e6c9', borderRadius: 8, padding: 10, alignItems: 'center' }}>
+              <Text style={{ fontSize: t.fs(13), fontWeight: '900', color: rx ? '#52b788' : t.text3 }}>Rx</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setRx(false)}
+              style={{ flex: 1, backgroundColor: !rx ? '#f4a26120' : t.dark ? '#080e0a' : '#fff', borderWidth: 1.5, borderColor: !rx ? '#f4a261' : t.dark ? '#1a3a1e' : '#c8e6c9', borderRadius: 8, padding: 10, alignItems: 'center' }}>
+              <Text style={{ fontSize: t.fs(13), fontWeight: '900', color: !rx ? '#f4a261' : t.text3 }}>Scaled</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Input tipado según formato */}
+          {(() => {
+            const inputBase = { backgroundColor: t.dark ? '#080e0a' : '#fff', borderWidth: 1, borderColor: t.dark ? '#1a3a1e' : '#c8e6c9', borderRadius: 8, color: t.dark ? '#81c784' : '#2e7d32', fontWeight: '700', padding: 12 };
+            const ph = t.dark ? '#2a4a2e' : '#81c784';
+            if (fmt === 'amrap') return (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>RONDAS + REPS EXTRA</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <TextInput value={rondas} onChangeText={setRondas} keyboardType="numeric" placeholder="0" placeholderTextColor={ph}
+                    style={[inputBase, { flex: 1, textAlign: 'center', fontSize: t.fs(28) }]} />
+                  <Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>+</Text>
+                  <TextInput value={repsExtra} onChangeText={setRepsExtra} keyboardType="numeric" placeholder="0" placeholderTextColor={ph}
+                    style={[inputBase, { flex: 1, textAlign: 'center', fontSize: t.fs(28) }]} />
+                </View>
+              </View>
+            );
+            if (fmt === 'fortime') return (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>TIEMPO (MIN : SEG)</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <TextInput value={minutos} onChangeText={setMinutos} keyboardType="numeric" placeholder="00" placeholderTextColor={ph}
+                    style={[inputBase, { flex: 1, textAlign: 'center', fontSize: t.fs(28) }]} />
+                  <Text style={{ fontSize: t.fs(28), color: t.text3, fontWeight: '900' }}>:</Text>
+                  <TextInput value={segundos} onChangeText={setSegundos} keyboardType="numeric" placeholder="00" placeholderTextColor={ph}
+                    style={[inputBase, { flex: 1, textAlign: 'center', fontSize: t.fs(28) }]} />
+                </View>
+              </View>
+            );
+            if (fmt === 'emom') {
+              const total = day.wod.emomMinutes?.length;
+              return (
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={{ fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>
+                    MINUTOS COMPLETADOS{total ? ` / ${total}` : ''}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <TextInput value={rondas} onChangeText={setRondas} keyboardType="numeric" placeholder="0" placeholderTextColor={ph}
+                      style={[inputBase, { flex: 1, textAlign: 'center', fontSize: t.fs(28) }]} />
+                    {!!total && <Text style={{ fontSize: t.fs(18), color: t.text3 }}>/ {total}</Text>}
+                  </View>
+                </View>
+              );
+            }
+            if (fmt === 'maxreps') return (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>REPS MÁXIMAS</Text>
+                <TextInput value={rondas} onChangeText={setRondas} keyboardType="numeric" placeholder="0" placeholderTextColor={ph}
+                  style={[inputBase, { textAlign: 'center', fontSize: t.fs(28) }]} />
+              </View>
+            );
+            return (
+              <TextInput value={resultado} onChangeText={setResultado} placeholder="Tu resultado..."
+                placeholderTextColor={ph}
+                style={[inputBase, { fontSize: t.fs(14), marginBottom: 10 }]} />
+            );
+          })()}
+
           <TextInput
             value={notas} onChangeText={setNotas}
             placeholder="Notas de la sesión..."

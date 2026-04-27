@@ -74,11 +74,11 @@ export function AppProvider({ children }) {
       // Cargar resultados desde Supabase (fuente de verdad)
       const { data: resData } = await supabase
         .from('resultados')
-        .select('dia, resultado, notas, fecha')
+        .select('dia, resultado, notas, fecha, rx')
         .eq('user_id', uid);
       if (resData?.length) {
         const resMap = {};
-        resData.forEach(r => { resMap[r.dia] = { resultado: r.resultado, notas: r.notas, fecha: r.fecha }; });
+        resData.forEach(r => { resMap[r.dia] = { resultado: r.resultado, notas: r.notas, fecha: r.fecha, rx: r.rx !== false }; });
         setResultados(prev => ({ ...prev, ...resMap }));
         await AsyncStorage.setItem('user_resultados', JSON.stringify({ ...resMap }));
       }
@@ -153,12 +153,13 @@ export function AppProvider({ children }) {
           resultado: data.resultado,
           notas: data.notas,
           fecha: data.fecha,
+          rx: data.rx !== false,
         });
         // Publicar en feed social
         await supabase.from('feed_actividad').insert({
           user_id: user.id,
           tipo: 'wod_completado',
-          data: { dia: key, resultado: data.resultado, notas: data.notas },
+          data: { dia: key, resultado: data.resultado, notas: data.notas, rx: data.rx !== false },
         });
       }
     } catch (e) {}
