@@ -147,40 +147,24 @@ export default function WodScreen({ navigate }) {
 
   useEffect(() => {
     const res = day ? resultados[day.day] : null;
-    setResultado(res?.resultado || '');
     setNotas(res?.notas || '');
     setRx(res?.rx !== false);
-    const fmt = detectFormat(day?.wod);
     const r = res?.resultado || '';
-    if (fmt === 'amrap' && r.includes('+')) {
-      const [ron, rep] = r.split('+');
-      setRondas(ron || ''); setRepsExtra(rep || '');
-    } else if (fmt === 'fortime' && r.includes(':')) {
-      const [min, sec] = r.split(':');
-      setMinutos(min || ''); setSegundos(sec || '');
-    } else if ((fmt === 'emom' || fmt === 'maxreps') && r) {
-      setRondas(r.split('/')[0] || '');
-    } else {
-      setRondas(''); setRepsExtra(''); setMinutos(''); setSegundos('');
-    }
+    setResultado(r);
+    const segs = r.split(' · ');
+    const roundsPart = segs.find(s => s.includes('+')) || '';
+    const timePart   = segs.find(s => /^\d{1,2}:\d{2}$/.test(s)) || '';
+    if (roundsPart) { const [ron, rep] = roundsPart.split('+'); setRondas(ron || ''); setRepsExtra(rep || ''); }
+    else { setRondas(''); setRepsExtra(''); }
+    if (timePart) { const [min, sec] = timePart.split(':'); setMinutos(min || ''); setSegundos(sec || ''); }
+    else { setMinutos(''); setSegundos(''); }
   }, [day?.day]);
 
   const guardar = async () => {
     if (!day) return;
-    const fmt = detectFormat(day.wod);
-    let finalResultado = resultado;
-    if (fmt === 'amrap') {
-      finalResultado = rondas ? `${rondas}+${repsExtra || '0'}` : '';
-    } else if (fmt === 'fortime') {
-      finalResultado = minutos
-        ? `${minutos.padStart(2, '0')}:${(segundos || '00').padStart(2, '0')}`
-        : '';
-    } else if (fmt === 'emom') {
-      const total = day.wod.emomMinutes?.length || '';
-      finalResultado = rondas ? `${rondas}${total ? '/' + total : ''}` : '';
-    } else if (fmt === 'maxreps') {
-      finalResultado = rondas ? `${rondas} reps` : '';
-    }
+    const timePart   = minutos ? `${minutos.padStart(2,'0')}:${(segundos||'00').padStart(2,'0')}` : '';
+    const roundsPart = rondas  ? `${rondas}+${repsExtra || '0'}` : '';
+    const finalResultado = [roundsPart, timePart].filter(Boolean).join(' · ') || resultado;
     await saveResultado(day.day, { resultado: finalResultado, notas, fecha: new Date().toISOString(), rx });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -204,12 +188,9 @@ export default function WodScreen({ navigate }) {
   const rmVal   = parseFloat(rms[rmKey]);
   const hasRM   = rmVal > 0;
 
-  const fmt = detectFormat(day?.wod);
-  const currentResult = fmt === 'amrap' ? (rondas ? `${rondas}+${repsExtra || '0'}` : '')
-    : fmt === 'fortime' ? (minutos ? `${minutos.padStart(2,'0')}:${(segundos||'00').padStart(2,'0')}` : '')
-    : fmt === 'emom' ? (rondas ? `${rondas}${day?.wod?.emomMinutes?.length ? '/'+day.wod.emomMinutes.length : ''}` : '')
-    : fmt === 'maxreps' ? (rondas ? `${rondas} reps` : '')
-    : resultado;
+  const timePart_   = minutos ? `${minutos.padStart(2,'0')}:${(segundos||'00').padStart(2,'0')}` : '';
+  const roundsPart_ = rondas  ? `${rondas}+${repsExtra || '0'}` : '';
+  const currentResult = [roundsPart_, timePart_].filter(Boolean).join(' · ') || resultado;
   const hasResult = !!currentResult;
 
   // ── NO HAY WOD HOY ──────────────────────────────────────────
@@ -444,70 +425,40 @@ export default function WodScreen({ navigate }) {
             </TouchableOpacity>
           </View>
 
-          {/* Input tipado según formato */}
+          {/* Inputs — siempre visibles para todos los tipos */}
           {(() => {
-            const inputBase = { backgroundColor: t.dark ? '#080e0a' : '#fff', borderWidth: 1, borderColor: t.dark ? '#1a3a1e' : '#c8e6c9', borderRadius: 8, color: t.dark ? '#81c784' : '#2e7d32', fontWeight: '700', padding: 12 };
+            const inputBase = { backgroundColor: t.dark ? '#080e0a' : '#fff', borderWidth: 1, borderColor: t.dark ? '#1a3a1e' : '#c8e6c9', borderRadius: 8, color: t.dark ? '#81c784' : '#2e7d32', fontWeight: '700', padding: 12, textAlign: 'center', fontSize: t.fs(32) };
             const ph = t.dark ? '#2a4a2e' : '#81c784';
-            if (fmt === 'amrap') return (
-              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6, textAlign: 'center' }}>RONDAS</Text>
-                  <TextInput value={rondas} onChangeText={setRondas} keyboardType="numeric" placeholder="0" placeholderTextColor={ph}
-                    style={[inputBase, { textAlign: 'center', fontSize: t.fs(32) }]} />
-                </View>
-                <View style={{ alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 }}>
-                  <Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>+</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6, textAlign: 'center' }}>REPS EXTRA</Text>
-                  <TextInput value={repsExtra} onChangeText={setRepsExtra} keyboardType="numeric" placeholder="0" placeholderTextColor={ph}
-                    style={[inputBase, { textAlign: 'center', fontSize: t.fs(32) }]} />
-                </View>
-              </View>
-            );
-            if (fmt === 'fortime') return (
-              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6, textAlign: 'center' }}>MINUTOS</Text>
-                  <TextInput value={minutos} onChangeText={setMinutos} keyboardType="numeric" placeholder="00" placeholderTextColor={ph}
-                    style={[inputBase, { textAlign: 'center', fontSize: t.fs(32) }]} />
-                </View>
-                <View style={{ alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 }}>
-                  <Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>:</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6, textAlign: 'center' }}>SEGUNDOS</Text>
-                  <TextInput value={segundos} onChangeText={setSegundos} keyboardType="numeric" placeholder="00" placeholderTextColor={ph}
-                    style={[inputBase, { textAlign: 'center', fontSize: t.fs(32) }]} />
-                </View>
-              </View>
-            );
-            if (fmt === 'emom') {
-              const total = day.wod.emomMinutes?.length;
-              return (
-                <View style={{ marginBottom: 12 }}>
-                  <Text style={{ fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>
-                    MINUTOS COMPLETADOS{total ? ` / ${total}` : ''}
-                  </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <TextInput value={rondas} onChangeText={setRondas} keyboardType="numeric" placeholder="0" placeholderTextColor={ph}
-                      style={[inputBase, { flex: 1, textAlign: 'center', fontSize: t.fs(28) }]} />
-                    {!!total && <Text style={{ fontSize: t.fs(18), color: t.text3 }}>/ {total}</Text>}
+            const label = { fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6, textAlign: 'center' };
+            const sep = { alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 };
+            return (
+              <>
+                <Text style={[label, { marginBottom: 8 }]}>TIEMPO REALIZADO</Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={label}>MIN</Text>
+                    <TextInput value={minutos} onChangeText={setMinutos} keyboardType="numeric" placeholder="00" placeholderTextColor={ph} style={inputBase} />
+                  </View>
+                  <View style={sep}><Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>:</Text></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={label}>SEG</Text>
+                    <TextInput value={segundos} onChangeText={setSegundos} keyboardType="numeric" placeholder="00" placeholderTextColor={ph} style={inputBase} />
                   </View>
                 </View>
-              );
-            }
-            if (fmt === 'maxreps') return (
-              <View style={{ marginBottom: 12 }}>
-                <Text style={{ fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>REPS MÁXIMAS</Text>
-                <TextInput value={rondas} onChangeText={setRondas} keyboardType="numeric" placeholder="0" placeholderTextColor={ph}
-                  style={[inputBase, { textAlign: 'center', fontSize: t.fs(28) }]} />
-              </View>
-            );
-            return (
-              <TextInput value={resultado} onChangeText={setResultado} placeholder="Tu resultado..."
-                placeholderTextColor={ph}
-                style={[inputBase, { fontSize: t.fs(14), marginBottom: 10 }]} />
+
+                <Text style={[label, { marginBottom: 8 }]}>RONDAS + REPS</Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={label}>RONDAS</Text>
+                    <TextInput value={rondas} onChangeText={setRondas} keyboardType="numeric" placeholder="0" placeholderTextColor={ph} style={inputBase} />
+                  </View>
+                  <View style={sep}><Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>+</Text></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={label}>REPS EXTRA</Text>
+                    <TextInput value={repsExtra} onChangeText={setRepsExtra} keyboardType="numeric" placeholder="0" placeholderTextColor={ph} style={inputBase} />
+                  </View>
+                </View>
+              </>
             );
           })()}
 
