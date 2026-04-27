@@ -152,6 +152,80 @@ function ShareCard({ day, resultado, notas, rx, acento }) {
   );
 }
 
+// ── Tira de progresión — últimos 4 resultados ─────────────────
+const MONTHS_S = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+function fmtDateShort(iso) {
+  try { const d = new Date(iso); return `${d.getDate()} ${MONTHS_S[d.getMonth()]}`; } catch { return ''; }
+}
+function ProgressStrip({ resultados, currentDayKey, t }) {
+  const entries = Object.entries(resultados)
+    .filter(([k, v]) => k !== currentDayKey && v?.resultado)
+    .map(([k, v]) => {
+      const segs = (v.resultado || '').split(' · ');
+      const roundsPart = segs.find(s => /^\d+\+\d+$/.test(s.trim())) || '';
+      const timePart   = segs.find(s => /^\d{1,2}:\d{2}$/.test(s.trim())) || '';
+      const [ron, rep] = roundsPart ? roundsPart.split('+') : ['', ''];
+      const [min, sec] = timePart   ? timePart.split(':')   : ['', ''];
+      return {
+        key: k,
+        resultado: v.resultado,
+        fecha: v.fecha,
+        rx: v.rx !== false,
+        roundsPart, timePart,
+        rondasN: roundsPart ? parseInt(ron) * 1000 + parseInt(rep || 0) : null,
+        timeN:   timePart   ? parseInt(min) * 60  + parseInt(sec || 0) : null,
+      };
+    })
+    .filter(e => e.fecha)
+    .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+    .slice(0, 4)
+    .reverse();
+
+  if (entries.length === 0) return null;
+
+  const hasRounds = entries.some(e => e.roundsPart);
+  const hasTime   = entries.some(e => e.timePart);
+
+  let scores;
+  if (hasRounds) {
+    const vals = entries.map(e => e.rondasN ?? 0);
+    const mn = Math.min(...vals), mx = Math.max(...vals);
+    scores = vals.map(v => mx === mn ? 70 : 20 + 60 * (v - mn) / (mx - mn));
+  } else if (hasTime) {
+    const vals = entries.map(e => e.timeN ?? 0);
+    const mn = Math.min(...vals), mx = Math.max(...vals);
+    scores = vals.map(v => mx === mn ? 70 : 20 + 60 * (mx - v) / (mx - mn));
+  } else {
+    scores = entries.map(() => 60);
+  }
+
+  return (
+    <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.accent + '30', borderRadius: 10, padding: 14, marginBottom: 10 }}>
+      <Text style={{ fontSize: t.fs(10), fontWeight: '700', letterSpacing: 2, color: t.accent, marginBottom: 14 }}>📈 TU PROGRESIÓN</Text>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {entries.map((e, i) => (
+          <View key={e.key} style={{ flex: 1, alignItems: 'center' }}>
+            <View style={{ height: 56, justifyContent: 'flex-end', width: '100%', marginBottom: 6 }}>
+              <View style={{ width: '100%', height: Math.round(scores[i]), backgroundColor: t.accent + '35', borderTopLeftRadius: 4, borderTopRightRadius: 4, borderWidth: 1, borderColor: t.accent + '60' }} />
+            </View>
+            <Text style={{ fontSize: t.fs(9), fontWeight: '900', color: t.text, textAlign: 'center' }} numberOfLines={2} adjustsFontSizeToFit>
+              {e.resultado}
+            </Text>
+            <Text style={{ fontSize: t.fs(8), color: t.text3, marginTop: 2 }}>
+              {fmtDateShort(e.fecha)}
+            </Text>
+            <View style={{ marginTop: 4, backgroundColor: e.rx ? t.accent + '20' : '#f4a26120', borderRadius: 3, paddingHorizontal: 5, paddingVertical: 1 }}>
+              <Text style={{ fontSize: t.fs(7), color: e.rx ? t.accent : '#f4a261', fontWeight: '800' }}>
+                {e.rx ? 'Rx' : 'Sc'}
+              </Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function detectFormat(wod) {
   if (!wod) return 'text';
   if (wod.emomMinutes) return 'emom';
@@ -446,6 +520,9 @@ export default function WodScreen({ navigate }) {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* PROGRESIÓN */}
+        <ProgressStrip resultados={resultados} currentDayKey={day.day} t={t} />
 
         {/* ANOTAR RESULTADO */}
         <View style={{ backgroundColor: t.dark ? '#06100a' : '#e8f5e9', borderWidth: 1, borderColor: t.dark ? '#2e6e3250' : '#c8e6c9', borderRadius: 10, padding: 14 }}>
