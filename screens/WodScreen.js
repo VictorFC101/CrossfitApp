@@ -89,15 +89,45 @@ function ShareCard({ day, resultado, notas, rx, acento }) {
       <View style={{ height: 1, backgroundColor: acento + '35', marginVertical: 16 }} />
 
       {/* Resultado */}
-      <Text style={{ fontSize: 10, color: acento, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>
+      <Text style={{ fontSize: 10, color: acento, letterSpacing: 2, fontWeight: '700', marginBottom: 10 }}>
         ✅  MI RESULTADO
       </Text>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
-        <Text style={{ fontSize: 32, fontWeight: '900', color: '#fff', letterSpacing: 1 }}>{resultado}</Text>
-        <Text style={{ fontSize: 11, fontWeight: '700', color: rx ? '#52b788' : '#f4a261', letterSpacing: 1 }}>{rx ? 'Rx' : 'Scaled'}</Text>
-      </View>
+      {(() => {
+        const segs = resultado.split(' · ');
+        const roundsPart = segs.find(s => s.includes('+'));
+        const timePart   = segs.find(s => /^\d{1,2}:\d{2}$/.test(s));
+        const onlyOne = !!(roundsPart) !== !!(timePart); // XOR — solo uno de los dos
+        return (
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 6 }}>
+            {timePart && (
+              <View style={{ flex: 1, backgroundColor: '#ffffff08', borderRadius: 8, padding: 10, alignItems: 'center' }}>
+                <Text style={{ fontSize: 10, color: '#ffffff55', letterSpacing: 1, marginBottom: 4 }}>TIEMPO</Text>
+                <Text style={{ fontSize: onlyOne ? 32 : 24, fontWeight: '900', color: '#fff', letterSpacing: 1 }}>{timePart}</Text>
+              </View>
+            )}
+            {roundsPart && (() => {
+              const [ron, rep] = roundsPart.split('+');
+              return (
+                <View style={{ flex: 1, backgroundColor: '#ffffff08', borderRadius: 8, padding: 10, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 10, color: '#ffffff55', letterSpacing: 1, marginBottom: 4 }}>RONDAS + REPS</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+                    <Text style={{ fontSize: onlyOne ? 32 : 24, fontWeight: '900', color: '#fff' }}>{ron}</Text>
+                    <Text style={{ fontSize: 14, color: '#ffffff60', fontWeight: '700' }}>+{rep}</Text>
+                  </View>
+                </View>
+              );
+            })()}
+            {!roundsPart && !timePart && (
+              <Text style={{ fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: 1 }}>{resultado}</Text>
+            )}
+            <View style={{ alignSelf: 'flex-end', backgroundColor: rx ? '#52b78820' : '#f4a26120', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: rx ? '#52b78850' : '#f4a26150' }}>
+              <Text style={{ fontSize: 11, fontWeight: '900', color: rx ? '#52b788' : '#f4a261' }}>{rx ? 'Rx' : 'Scaled'}</Text>
+            </View>
+          </View>
+        );
+      })()}
       {!!notas && (
-        <Text style={{ fontSize: 12, color: '#ffffff70', marginTop: 8, fontStyle: 'italic', lineHeight: 18 }}>
+        <Text style={{ fontSize: 12, color: '#ffffff70', marginTop: 6, fontStyle: 'italic', lineHeight: 18 }}>
           "{notas}"
         </Text>
       )}
