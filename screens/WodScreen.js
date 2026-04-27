@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
@@ -226,6 +226,111 @@ function ProgressStrip({ resultados, currentDayKey, t }) {
   );
 }
 
+// Aplica adaptación sobre el wod original sin mutarlo
+function applyAdaptacion(wod, adaptacion) {
+  if (!wod || !adaptacion?.movements?.length) return wod;
+  const map = {};
+  adaptacion.movements.forEach(m => { map[m.name] = m; });
+  const merge = (list) => (list || []).map(m => map[m.name] ? { ...m, reps: map[m.name].reps ?? m.reps, weight: map[m.name].weight ?? m.weight } : m);
+  if (wod.movements) return { ...wod, movements: merge(wod.movements) };
+  if (wod.parts) return { ...wod, parts: wod.parts.map(p => ({ ...p, movements: merge(p.movements) })) };
+  return wod;
+}
+
+// Extrae lista plana de movimientos de cualquier formato de WOD
+function extractMovements(wod) {
+  if (!wod) return [];
+  if (wod.movements) return wod.movements.filter(m => m.name && m.name !== '—');
+  if (wod.parts) return wod.parts.flatMap(p => (p.movements || []).filter(m => m.name && m.name !== '—'));
+  return [];
+}
+
+function AdaptModal({ visible, originalMovements, adaptacion, hasAdaptacion, onSave, onClose }) {
+  const t = useTheme();
+  const [localMovements, setLocalMovements] = useState([]);
+
+  useEffect(() => {
+    if (visible) {
+      setLocalMovements(
+        originalMovements.map(m => {
+          const saved = adaptacion?.movements?.find(a => a.name === m.name);
+          return { name: m.name, reps: String(saved?.reps ?? m.reps ?? ''), weight: String(saved?.weight ?? m.weight ?? '') };
+        })
+      );
+    }
+  }, [visible]);
+
+  const handleSave = () => {
+    const changed = localMovements.filter((lm, i) => {
+      const orig = originalMovements[i];
+      return lm.reps !== String(orig.reps ?? '') || lm.weight !== String(orig.weight ?? '');
+    });
+    onSave(changed.length ? { movements: changed } : null);
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: '#000000cc', justifyContent: 'flex-end' }}>
+        <View style={{ backgroundColor: t.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '85%' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={{ flex: 1, fontSize: t.fs(14), fontWeight: '900', color: t.text, letterSpacing: 1 }}>✏️ ADAPTAR WOD</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={{ fontSize: t.fs(20), color: t.text3 }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={{ fontSize: t.fs(11), color: t.text3, marginBottom: 14 }}>
+            Modifica pesos o reps para tu adaptación de hoy. El programa original no cambia.
+          </Text>
+
+          <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 14 }}>
+            {localMovements.map((m, i) => (
+              <View key={i} style={{ backgroundColor: t.bg4, borderRadius: 10, padding: 12, marginBottom: 10 }}>
+                <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text, marginBottom: 10 }}>{m.name}</Text>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: t.fs(9), color: t.text3, letterSpacing: 1, marginBottom: 4 }}>REPS</Text>
+                    <TextInput
+                      value={m.reps}
+                      onChangeText={v => setLocalMovements(prev => prev.map((x, j) => j === i ? { ...x, reps: v } : x))}
+                      keyboardType="numeric"
+                      placeholder={String(originalMovements[i]?.reps ?? '')}
+                      placeholderTextColor={t.text3}
+                      style={{ backgroundColor: t.bg, borderWidth: 1, borderColor: t.border, borderRadius: 8, color: t.text, padding: 10, fontSize: t.fs(15), fontWeight: '700', textAlign: 'center' }}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: t.fs(9), color: t.text3, letterSpacing: 1, marginBottom: 4 }}>PESO</Text>
+                    <TextInput
+                      value={m.weight}
+                      onChangeText={v => setLocalMovements(prev => prev.map((x, j) => j === i ? { ...x, weight: v } : x))}
+                      placeholder={String(originalMovements[i]?.weight ?? 'BW')}
+                      placeholderTextColor={t.text3}
+                      style={{ backgroundColor: t.bg, borderWidth: 1, borderColor: t.border, borderRadius: 8, color: t.text, padding: 10, fontSize: t.fs(15), fontWeight: '700', textAlign: 'center' }}
+                    />
+                  </View>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {hasAdaptacion && (
+              <TouchableOpacity onPress={() => onSave(null)}
+                style={{ flex: 1, backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 10, padding: 14, alignItems: 'center' }}>
+                <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: t.text3 }}>🔄 Restablecer</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={handleSave}
+              style={{ flex: 2, backgroundColor: t.accent, borderRadius: 10, padding: 14, alignItems: 'center' }}>
+              <Text style={{ fontSize: t.fs(13), fontWeight: '900', color: '#fff', letterSpacing: 1 }}>GUARDAR ADAPTACIÓN</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function detectFormat(wod) {
   if (!wod) return 'text';
   if (wod.emomMinutes) return 'emom';
@@ -251,6 +356,8 @@ export default function WodScreen({ navigate }) {
   const [segundos, setSegundos]   = useState('');
   const [saved, setSaved]         = useState(false);
   const [sharing, setSharing]     = useState(false);
+  const [adaptacion, setAdaptacion] = useState(null);
+  const [showAdaptModal, setShowAdaptModal] = useState(false);
   const shareCardRef              = useRef(null);
 
   const allDaysFlat = activeProgram
@@ -264,6 +371,7 @@ export default function WodScreen({ navigate }) {
   useEffect(() => {
     setNotas(savedResult?.notas || '');
     setRx(savedResult?.rx !== false);
+    setAdaptacion(savedResult?.adaptacion || null);
     const r = savedResult?.resultado || '';
     setResultado(r);
     const segs = r.split(' · ');
@@ -280,7 +388,7 @@ export default function WodScreen({ navigate }) {
     const timePart   = minutos ? `${minutos.padStart(2,'0')}:${(segundos||'00').padStart(2,'0')}` : '';
     const roundsPart = rondas  ? `${rondas}+${repsExtra || '0'}` : '';
     const finalResultado = [roundsPart, timePart].filter(Boolean).join(' · ') || resultado;
-    await saveResultado(day.day, { resultado: finalResultado, notas, fecha: new Date().toISOString(), rx });
+    await saveResultado(day.day, { resultado: finalResultado, notas, fecha: new Date().toISOString(), rx, adaptacion });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -307,6 +415,10 @@ export default function WodScreen({ navigate }) {
   const roundsPart_ = rondas  ? `${rondas}+${repsExtra || '0'}` : '';
   const currentResult = [roundsPart_, timePart_].filter(Boolean).join(' · ') || resultado;
   const hasResult = !!currentResult;
+
+  const effectiveWod = day?.wod ? applyAdaptacion(day.wod, adaptacion) : day?.wod;
+  const adaptedDay   = day ? { ...day, wod: effectiveWod } : day;
+  const hasAdaptacion = !!(adaptacion?.movements?.length);
 
   // ── NO HAY WOD HOY ──────────────────────────────────────────
   if (!todayInProgram || !day) {
@@ -341,13 +453,24 @@ export default function WodScreen({ navigate }) {
     );
   }
 
+  const originalMovements = extractMovements(day.wod);
+
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
+
+      <AdaptModal
+        visible={showAdaptModal}
+        originalMovements={originalMovements}
+        adaptacion={adaptacion}
+        hasAdaptacion={hasAdaptacion}
+        onSave={(newAdaptacion) => { setAdaptacion(newAdaptacion); setShowAdaptModal(false); }}
+        onClose={() => setShowAdaptModal(false)}
+      />
 
       {/* ShareCard renderizada fuera de pantalla para captura */}
       <View style={{ position: 'absolute', top: 0, left: -400 }} collapsable={false}>
         <ViewShot ref={shareCardRef} options={{ format: 'png', quality: 0.95, result: 'tmpfile' }}>
-          <ShareCard day={day} resultado={currentResult} notas={notas} rx={rx} acento={t.accent} />
+          <ShareCard day={adaptedDay} resultado={currentResult} notas={notas} rx={rx} acento={t.accent} />
         </ViewShot>
       </View>
 
@@ -425,13 +548,23 @@ export default function WodScreen({ navigate }) {
         {/* WOD */}
         {day.wod && (day.wod.movements || day.wod.parts || day.wod.emomMinutes) && (
           <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.accent + '30', borderRadius: 10, padding: 14, marginBottom: 10 }}>
-            <Text style={{ fontSize: t.fs(12), fontWeight: '700', letterSpacing: 2, color: t.accent, marginBottom: 10 }}>
-              ⚡ WOD{day.wod.parts ? ` — DOBLE WOD` : day.wod.type ? ` — ${day.wod.type} ${day.wod.duration}` : ''}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+              <Text style={{ flex: 1, fontSize: t.fs(12), fontWeight: '700', letterSpacing: 2, color: t.accent }}>
+                ⚡ WOD{day.wod.parts ? ` — DOBLE WOD` : day.wod.type ? ` — ${day.wod.type} ${day.wod.duration}` : ''}
+              </Text>
+              {extractMovements(day.wod).length > 0 && (
+                <TouchableOpacity onPress={() => setShowAdaptModal(true)}
+                  style={{ backgroundColor: hasAdaptacion ? t.accent + '20' : t.bg4, borderWidth: 1, borderColor: hasAdaptacion ? t.accent : t.border, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 }}>
+                  <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: hasAdaptacion ? t.accent : t.text3 }}>
+                    {hasAdaptacion ? '✏️ Adaptado' : '✏️ Adaptar'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
             {/* WOD con múltiples partes */}
-            {day.wod.parts ? day.wod.parts.map((part, pi) => (
-              <View key={pi} style={{ marginBottom: pi < day.wod.parts.length - 1 ? 14 : 0 }}>
+            {effectiveWod.parts ? effectiveWod.parts.map((part, pi) => (
+              <View key={pi} style={{ marginBottom: pi < effectiveWod.parts.length - 1 ? 14 : 0 }}>
                 <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                   <View style={{ backgroundColor: t.accent + '20', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 }}>
                     <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: t.accent }}>WOD {pi + 1} · {part.type} · {part.duration}</Text>
@@ -445,16 +578,19 @@ export default function WodScreen({ navigate }) {
                     <Text style={{ fontSize: t.fs(11), color: t.text2 }}>{part.formatNote}</Text>
                   </View>
                 )}
-                {part.movements?.filter(m => m.name !== '—').map((m, i) => (
-                  <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent, borderRadius: 8, padding: 10, marginBottom: 6 }}>
+                {part.movements?.filter(m => m.name !== '—').map((m, i) => {
+                  const adapted = adaptacion?.movements?.find(a => a.name === m.name);
+                  return (
+                  <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: adapted ? t.accent + '10' : t.bg4, borderLeftWidth: 3, borderLeftColor: adapted ? t.accent : t.accent + '60', borderRadius: 8, padding: 10, marginBottom: 6 }}>
                     <Text style={{ minWidth: 38, fontSize: t.fs(13), fontWeight: '700', color: t.accent }}>{m.reps}</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{m.name}</Text>
-                      {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 2 }}>{m.weight}</Text>}
+                      {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: adapted ? t.accent : t.text2, marginTop: 2 }}>{m.weight}{adapted ? ' ✏️' : ''}</Text>}
                     </View>
                   </View>
-                ))}
-                {pi < day.wod.parts.length - 1 && (
+                  );
+                })}
+                {pi < effectiveWod.parts.length - 1 && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 }}>
                     <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
                     <Text style={{ fontSize: t.fs(9), color: t.text3, fontWeight: '700', letterSpacing: 2 }}>2 MIN DESCANSO</Text>
@@ -465,14 +601,14 @@ export default function WodScreen({ navigate }) {
             )) : null}
 
             {/* WOD EMOM */}
-            {!day.wod.parts && day.wod.emomMinutes && (
+            {!effectiveWod.parts && effectiveWod.emomMinutes && (
               <>
-                {day.wod.formatNote && (
+                {effectiveWod.formatNote && (
                   <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 8 }}>
-                    <Text style={{ fontSize: t.fs(11), color: t.text2 }}>{day.wod.formatNote}</Text>
+                    <Text style={{ fontSize: t.fs(11), color: t.text2 }}>{effectiveWod.formatNote}</Text>
                   </View>
                 )}
-                {day.wod.emomMinutes.map((min, i) => (
+                {effectiveWod.emomMinutes.map((min, i) => (
                   <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent, borderRadius: 8, padding: 10, marginBottom: 6 }}>
                     <Text style={{ minWidth: 52, fontSize: t.fs(10), fontWeight: '700', color: t.accent }}>{min.min}</Text>
                     <View style={{ flex: 1 }}>
@@ -485,27 +621,30 @@ export default function WodScreen({ navigate }) {
             )}
 
             {/* WOD LADDER / estándar */}
-            {!day.wod.parts && !day.wod.emomMinutes && day.wod.movements && (
+            {!effectiveWod.parts && !effectiveWod.emomMinutes && effectiveWod.movements && (
               <>
-                {day.wod.formatNote && (
+                {effectiveWod.formatNote && (
                   <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 8 }}>
-                    <Text style={{ fontSize: t.fs(11), color: t.text2 }}>⚡ {day.wod.format} — {day.wod.formatNote}</Text>
+                    <Text style={{ fontSize: t.fs(11), color: t.text2 }}>⚡ {effectiveWod.format} — {effectiveWod.formatNote}</Text>
                   </View>
                 )}
-                {day.wod.ladderNote && (
+                {effectiveWod.ladderNote && (
                   <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 8 }}>
-                    <Text style={{ fontSize: t.fs(11), color: t.text2 }}>📐 {day.wod.ladderNote}</Text>
+                    <Text style={{ fontSize: t.fs(11), color: t.text2 }}>📐 {effectiveWod.ladderNote}</Text>
                   </View>
                 )}
-                {day.wod.movements.filter(m => m.name !== '—').map((m, i) => (
-                  <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent, borderRadius: 8, padding: 10, marginBottom: 7 }}>
-                    <Text style={{ minWidth: 38, fontSize: t.fs(13), fontWeight: '700', color: t.accent }}>{m.reps}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: t.fs(14), fontWeight: '700', color: t.text }}>{m.name}</Text>
-                      {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 2 }}>{m.weight}</Text>}
+                {effectiveWod.movements.filter(m => m.name !== '—').map((m, i) => {
+                  const adapted = adaptacion?.movements?.find(a => a.name === m.name);
+                  return (
+                    <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: adapted ? t.accent + '10' : t.bg4, borderLeftWidth: 3, borderLeftColor: adapted ? t.accent : t.accent + '60', borderRadius: 8, padding: 10, marginBottom: 7 }}>
+                      <Text style={{ minWidth: 38, fontSize: t.fs(13), fontWeight: '700', color: t.accent }}>{m.reps}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: t.fs(14), fontWeight: '700', color: t.text }}>{m.name}</Text>
+                        {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: adapted ? t.accent : t.text2, marginTop: 2 }}>{m.weight}{adapted ? ' ✏️' : ''}</Text>}
+                      </View>
                     </View>
-                  </View>
-                ))}
+                  );
+                })}
               </>
             )}
 
