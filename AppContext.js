@@ -61,7 +61,17 @@ export function AppProvider({ children }) {
         .eq('id', uid)
         .single();
 
-      if (data) setUserProfile({ ...data, ...(privateData || {}) });
+      // Si Supabase no tiene onboarding_completed, usar AsyncStorage como fuente de verdad local
+      let onboardingDone = privateData?.onboarding_completed;
+      if (!onboardingDone) {
+        const local = await AsyncStorage.getItem('@crossfit_onboarding_done');
+        if (local === '1') {
+          onboardingDone = true;
+          // Reparar en Supabase en background
+          if (uid) supabase.from('usuarios').update({ onboarding_completed: true }).eq('id', uid).then(() => {});
+        }
+      }
+      if (data) setUserProfile({ ...data, ...(privateData || {}), onboarding_completed: onboardingDone });
 
       // Cargar perfil y resultados del partner
       const partnerId = privateData?.partner_id;
@@ -208,10 +218,12 @@ export function AppProvider({ children }) {
   };
 
   const completeOnboarding = async () => {
+    // Guardar en AsyncStorage primero como fallback local garantizado
+    await AsyncStorage.setItem('@crossfit_onboarding_done', '1').catch(() => {});
+    setUserProfile(prev => ({ ...prev, onboarding_completed: true }));
     try {
       if (userProfile?.id) {
         await supabase.from('usuarios').update({ onboarding_completed: true }).eq('id', userProfile.id);
-        setUserProfile(prev => ({ ...prev, onboarding_completed: true }));
       }
     } catch (e) {}
   };

@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Image, Alert } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import AdminScreen from './AdminScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -372,7 +372,10 @@ export default function ProfileScreen() {
                 {partnerRequest.solicitante?.nombre || 'Alguien'} quiere entrenar contigo como pareja
               </Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity onPress={() => acceptPartnerRequest(partnerRequest.id)}
+                <TouchableOpacity onPress={async () => {
+                    const res = await acceptPartnerRequest(partnerRequest.id);
+                    if (!res?.success) Alert.alert('Error', res?.error || 'No se pudo aceptar. Asegúrate de ejecutar la migración SQL en Supabase.');
+                  }}
                   style={{ flex: 1, backgroundColor: t.accent, borderRadius: 8, padding: 10, alignItems: 'center' }}>
                   <Text style={{ fontSize: t.fs(12), color: '#fff', fontWeight: '900' }}>✓ Aceptar</Text>
                 </TouchableOpacity>
@@ -435,7 +438,10 @@ export default function ProfileScreen() {
                   const amigo = a.solicitante?.id === myUserId ? a.receptor : a.solicitante;
                   if (!amigo) return null;
                   return (
-                    <TouchableOpacity key={i} onPress={() => sendPartnerRequest(amigo.id, amigo.nombre || amigo.email)}
+                    <TouchableOpacity key={i} onPress={async () => {
+                        const res = await sendPartnerRequest(amigo.id, amigo.nombre || amigo.email);
+                        if (!res?.success) Alert.alert('Error', res?.error || 'No se pudo enviar la solicitud. Asegúrate de que la función está activada en el servidor.');
+                      }}
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, marginBottom: 8 }}>
                       <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: t.accent + '20', alignItems: 'center', justifyContent: 'center' }}>
                         <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: t.accent }}>
