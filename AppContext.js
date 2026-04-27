@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 
@@ -16,6 +17,9 @@ export function AppProvider({ children }) {
   const [partnerRequest, setPartnerRequest] = useState(null);     // solicitud recibida pendiente
   const [sentPartnerRequest, setSentPartnerRequest] = useState(null); // solicitud enviada pendiente
 
+  const appStateRef = useRef(AppState.currentState);
+  const partnerChannelRef = useRef(null);
+
   useEffect(() => {
     loadLocalData();
     loadUserProfile();
@@ -25,7 +29,20 @@ export function AppProvider({ children }) {
       else setUserProfile(null);
     });
 
-    return () => subscription.unsubscribe();
+    // Refrescar perfil (y pareja) cuando la app vuelve al primer plano
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (appStateRef.current !== 'active' && nextState === 'active') {
+        supabase.auth.getUser().then(({ data: { user } }) => {
+          if (user) loadUserProfile(user.id);
+        });
+      }
+      appStateRef.current = nextState;
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      appStateSub.remove();
+    };
   }, []);
 
   const loadLocalData = async () => {
@@ -97,7 +114,8 @@ export function AppProvider({ children }) {
         } else {
           setPartnerResultados({});
         }
-      } else {
+      } else if (privateData !== null) {
+        // Solo limpiar si el SELECT de usuarios tuvo éxito y partner_id es explícitamente null
         setPartnerProfile(null);
         setPartnerResultados({});
       }
@@ -141,6 +159,26 @@ export function AppProvider({ children }) {
         setResultados(prev => ({ ...prev, ...resMap }));
         await AsyncStorage.setItem('user_resultados', JSON.stringify({ ...resMap }));
       }
+
+      // Canal Realtime: detectar cuando la solicitud enviada es aceptada
+      if (partnerChannelRef.current) {
+        supabase.removeChannel(partnerChannelRef.current);
+        partnerChannelRef.current = null;
+      }
+      const channel = supabase
+        .channel(`solicitud-partner-${uid}`)
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'solicitudes_partner',
+          filter: `solicitante_id=eq.${uid}`,
+        }, (payload) => {
+          if (payload.new?.status === 'aceptada') {
+            loadUserProfile(uid);
+          }
+        })
+        .subscribe();
+      partnerChannelRef.current = channel;
     } catch (e) {}
     finally { setLoadingProfile(false); }
   };
