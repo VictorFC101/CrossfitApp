@@ -341,7 +341,12 @@ export function AppProvider({ children }) {
           rx: data.rx !== false,
           adaptacion: data.adaptacion || null,
         });
-        // Publicar en feed social
+        // Publicar en feed social — eliminar entrada anterior del mismo día antes de insertar
+        await supabase.from('feed_actividad')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('tipo', 'wod_completado')
+          .filter('data->>dia', 'eq', key);
         await supabase.from('feed_actividad').insert({
           user_id: user.id,
           tipo: 'wod_completado',

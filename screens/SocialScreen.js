@@ -33,8 +33,17 @@ function FeedItem({ item, t, TIPO_ICONS, TIPO_LABELS, getAmigoData, myUserId, on
       case 'wod_completado':
         return (
           <View>
-            {d.dia && <Text style={{ fontSize: t.fs(10), color: t.text3, marginBottom: 4 }}>📅 {d.dia}</Text>}
-            {d.resultado && <Text style={{ fontSize: t.fs(22), fontWeight: '900', color: t.accent }}>{d.resultado}</Text>}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              {d.dia && <Text style={{ fontSize: t.fs(10), color: t.text3 }}>📅 {d.dia}</Text>}
+              {d.rx !== undefined && (
+                <View style={{ backgroundColor: d.rx ? '#52b78820' : '#f4a26120', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, borderColor: d.rx ? '#52b78860' : '#f4a26160' }}>
+                  <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: d.rx ? '#52b788' : '#f4a261' }}>
+                    {d.rx ? 'RX' : 'SCALED'}
+                  </Text>
+                </View>
+              )}
+            </View>
+            {d.resultado && <Text style={{ fontSize: t.fs(22), fontWeight: '900', color: accentColor }}>{d.resultado}</Text>}
             {d.notas && <Text style={{ fontSize: t.fs(12), color: t.text2, marginTop: 4, lineHeight: t.fs(18) }}>{d.notas}</Text>}
           </View>
         );
