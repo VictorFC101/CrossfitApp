@@ -33,64 +33,87 @@ function ShareCard({ day, resultado, notas, rx, acento }) {
   const now = new Date();
   const dateStr = `${now.getDate()} ${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
 
+  // Parsear resultado — solo aceptar formatos estrictos
   const segs = (resultado || '').split(' · ');
-  const timePart   = segs.find(s => /^\d{1,2}:\d{2}$/.test(s)) || '';
-  const roundsPart = segs.find(s => s.includes('+')) || '';
-  const [ron, rep] = roundsPart ? roundsPart.split('+') : ['', ''];
-  const hasBoth = !!(timePart && roundsPart);
-  const hasNone = !timePart && !roundsPart;
+  const timePart   = segs.find(s => /^\d{1,2}:\d{2}$/.test(s.trim())) || '';
+  const roundsSeg  = segs.find(s => /^\d+\+\d+$/.test(s.trim())) || '';
+  const [ron, rep] = roundsSeg ? roundsSeg.split('+') : ['', ''];
+  const hasBoth    = !!(timePart && roundsSeg);
+  const hasNone    = !timePart && !roundsSeg;
+
+  // Movimientos: soporta movements, parts y emomMinutes
+  const movements = (() => {
+    if (day?.wod?.movements) return day.wod.movements.filter(m => m.name !== '—').slice(0, 5);
+    if (day?.wod?.parts) {
+      const all = day.wod.parts.flatMap(p => p.movements?.filter(m => m.name !== '—') || []);
+      return all.slice(0, 5);
+    }
+    if (day?.wod?.emomMinutes) return day.wod.emomMinutes.slice(0, 5).map(m => ({ reps: m.min, name: m.work }));
+    return [];
+  })();
 
   return (
     <View style={{ width: 320, backgroundColor: '#0a0a12', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: acento + '40' }}>
 
       {/* Cabecera */}
-      <View style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontSize: 18 }}>⚡</Text>
-            <Text style={{ fontSize: 18, fontWeight: '900', color: '#fff', letterSpacing: 3 }}>WODLY</Text>
-          </View>
-          <Text style={{ fontSize: 11, color: '#ffffff45' }}>{dateStr}</Text>
+      <View style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={{ fontSize: 18 }}>⚡</Text>
+          <Text style={{ fontSize: 18, fontWeight: '900', color: '#fff', letterSpacing: 3 }}>WODLY</Text>
         </View>
+        <Text style={{ fontSize: 11, color: '#ffffff45' }}>{dateStr}</Text>
       </View>
 
-      {/* Separador acento */}
-      <View style={{ height: 2, backgroundColor: acento + '60', marginHorizontal: 20 }} />
+      {/* Línea acento */}
+      <View style={{ height: 2, backgroundColor: acento + '70', marginHorizontal: 20, borderRadius: 1 }} />
 
       {/* Día + tipo */}
-      <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 16 }}>
-        <Text style={{ fontSize: 15, fontWeight: '900', color: '#fff', letterSpacing: 1, marginBottom: 2 }}>
-          {day?.label?.toUpperCase() || day?.day?.toUpperCase()}
+      <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 10 }}>
+        <Text style={{ fontSize: 14, fontWeight: '900', color: '#fff', letterSpacing: 1, marginBottom: 3 }}>
+          {(day?.label || day?.day || '').toUpperCase()}
         </Text>
         {(day?.wod?.type || day?.type) && (
-          <Text style={{ fontSize: 11, color: '#ffffff50', letterSpacing: 1 }}>
+          <Text style={{ fontSize: 10, color: '#ffffff50', letterSpacing: 1 }}>
             {[day?.wod?.type, day?.wod?.duration, day?.type?.toUpperCase()].filter(Boolean).join(' · ')}
           </Text>
         )}
       </View>
 
-      {/* Separador */}
-      <View style={{ height: 1, backgroundColor: '#ffffff10', marginHorizontal: 20 }} />
+      {/* Movimientos */}
+      {movements.length > 0 && (
+        <View style={{ paddingHorizontal: 20, paddingBottom: 14, gap: 5 }}>
+          {movements.map((m, i) => (
+            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#ffffff08', borderLeftWidth: 2, borderLeftColor: acento, borderRadius: 6, paddingVertical: 5, paddingHorizontal: 10 }}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: acento, minWidth: 32 }}>{m.reps}</Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff', flex: 1 }} numberOfLines={1}>{m.name}</Text>
+            </View>
+          ))}
+        </View>
+      )}
 
-      {/* Bloques de resultado — Podio */}
-      <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16 }}>
-        {hasNone ? (
-          <Text style={{ fontSize: 32, fontWeight: '900', color: '#fff', textAlign: 'center', letterSpacing: 1 }}>
-            {resultado}
-          </Text>
+      {/* Separador */}
+      <View style={{ height: 1, backgroundColor: '#ffffff12', marginHorizontal: 20, marginBottom: 16 }} />
+
+      {/* Bloques resultado — Podio */}
+      <View style={{ paddingHorizontal: 20, paddingBottom: 14 }}>
+        {hasNone && !!resultado ? (
+          <View style={{ backgroundColor: acento + '12', borderWidth: 1, borderColor: acento + '30', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 10 }}>
+            <Text style={{ fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: 1 }} numberOfLines={1} adjustsFontSizeToFit>{resultado}</Text>
+            <Text style={{ fontSize: 9, color: acento, letterSpacing: 2, fontWeight: '700', marginTop: 6 }}>RESULTADO</Text>
+          </View>
         ) : (
-          <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
             {timePart ? (
-              <View style={{ flex: 1, backgroundColor: acento + '12', borderWidth: 1, borderColor: acento + '30', borderRadius: 12, paddingVertical: 16, alignItems: 'center' }}>
-                <Text style={{ fontSize: hasBoth ? 30 : 38, fontWeight: '900', color: '#fff', letterSpacing: 1 }}>{timePart}</Text>
+              <View style={{ flex: 1, backgroundColor: acento + '12', borderWidth: 1, borderColor: acento + '30', borderRadius: 12, paddingVertical: 14, alignItems: 'center', overflow: 'hidden' }}>
+                <Text style={{ fontSize: hasBoth ? 26 : 34, fontWeight: '900', color: '#fff', letterSpacing: 1 }} numberOfLines={1} adjustsFontSizeToFit>{timePart}</Text>
                 <Text style={{ fontSize: 9, color: acento, letterSpacing: 2, fontWeight: '700', marginTop: 6 }}>TIEMPO</Text>
               </View>
             ) : null}
-            {roundsPart ? (
-              <View style={{ flex: 1, backgroundColor: acento + '12', borderWidth: 1, borderColor: acento + '30', borderRadius: 12, paddingVertical: 16, alignItems: 'center' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 3 }}>
-                  <Text style={{ fontSize: hasBoth ? 30 : 38, fontWeight: '900', color: '#fff' }}>{ron}</Text>
-                  <Text style={{ fontSize: hasBoth ? 18 : 22, fontWeight: '700', color: '#ffffff60', paddingBottom: hasBoth ? 3 : 4 }}>+{rep}</Text>
+            {roundsSeg ? (
+              <View style={{ flex: 1, backgroundColor: acento + '12', borderWidth: 1, borderColor: acento + '30', borderRadius: 12, paddingVertical: 14, alignItems: 'center', overflow: 'hidden' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2 }}>
+                  <Text style={{ fontSize: hasBoth ? 26 : 34, fontWeight: '900', color: '#fff' }} numberOfLines={1}>{ron}</Text>
+                  <Text style={{ fontSize: hasBoth ? 16 : 20, fontWeight: '700', color: '#ffffff55', paddingBottom: 3 }} numberOfLines={1}>+{rep}</Text>
                 </View>
                 <Text style={{ fontSize: 9, color: acento, letterSpacing: 2, fontWeight: '700', marginTop: 6 }}>RONDAS + REPS</Text>
               </View>
@@ -99,11 +122,9 @@ function ShareCard({ day, resultado, notas, rx, acento }) {
         )}
 
         {/* Rx / Scaled */}
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
-          <View style={{ backgroundColor: rx ? '#52b78818' : '#f4a26118', borderWidth: 1, borderColor: rx ? '#52b78860' : '#f4a26160', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 }}>
-            <Text style={{ fontSize: 11, fontWeight: '900', color: rx ? '#52b788' : '#f4a261', letterSpacing: 1 }}>
-              {rx ? '✓ Rx' : '⚡ Scaled'}
-            </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: rx ? '#52b78815' : '#f4a26115', borderWidth: 1, borderColor: rx ? '#52b78855' : '#f4a26155', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 }}>
+            <Text style={{ fontSize: 11, fontWeight: '900', color: rx ? '#52b788' : '#f4a261', letterSpacing: 1 }}>{rx ? '✓ Rx' : '⚡ Scaled'}</Text>
           </View>
         </View>
       </View>
@@ -112,17 +133,17 @@ function ShareCard({ day, resultado, notas, rx, acento }) {
       {!!notas && (
         <>
           <View style={{ height: 1, backgroundColor: '#ffffff10', marginHorizontal: 20 }} />
-          <View style={{ paddingHorizontal: 20, paddingVertical: 14 }}>
-            <Text style={{ fontSize: 12, color: '#ffffff60', fontStyle: 'italic', lineHeight: 18 }}>"{notas}"</Text>
+          <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
+            <Text style={{ fontSize: 11, color: '#ffffff55', fontStyle: 'italic', lineHeight: 17 }} numberOfLines={2}>"{notas}"</Text>
           </View>
         </>
       )}
 
       {/* Footer */}
       <View style={{ height: 1, backgroundColor: '#ffffff08', marginHorizontal: 20 }} />
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }}>
         <View style={{ flex: 1, height: 1, backgroundColor: '#ffffff08', marginLeft: 20 }} />
-        <Text style={{ fontSize: 9, color: '#ffffff25', letterSpacing: 4, fontWeight: '700' }}>WODLY.APP</Text>
+        <Text style={{ fontSize: 9, color: '#ffffff25', letterSpacing: 4, fontWeight: '700', marginHorizontal: 10 }}>WODLY.APP</Text>
         <View style={{ flex: 1, height: 1, backgroundColor: '#ffffff08', marginRight: 20 }} />
       </View>
     </View>
