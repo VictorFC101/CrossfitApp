@@ -96,11 +96,8 @@ export function AppProvider({ children }) {
       // Cargar perfil y resultados del partner
       const partnerId = privateData?.partner_id;
       if (partnerId) {
-        const { data: pProfile } = await supabase
-          .from('usuarios_publicos')
-          .select('id, nombre, avatar_url')
-          .eq('id', partnerId)
-          .single();
+        const { data: pData } = await supabase.rpc('get_user_public_info', { p_user_id: partnerId });
+        const pProfile = pData?.[0] || null;
         if (pProfile) setPartnerProfile(pProfile);
 
         const { data: pRes } = await supabase
