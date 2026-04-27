@@ -12,6 +12,8 @@ export function AppProvider({ children }) {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [partnerProfile, setPartnerProfile] = useState(null);
   const [partnerResultados, setPartnerResultados] = useState({});
+  const [partnerRequest, setPartnerRequest] = useState(null);     // solicitud recibida pendiente
+  const [sentPartnerRequest, setSentPartnerRequest] = useState(null); // solicitud enviada pendiente
 
   useEffect(() => {
     loadLocalData();
@@ -87,6 +89,22 @@ export function AppProvider({ children }) {
         setPartnerResultados({});
       }
 
+      // Cargar solicitudes de pareja pendientes
+      const { data: solicitudes } = await supabase
+        .from('solicitudes_partner')
+        .select('*, solicitante:solicitante_id(id, nombre), receptor:receptor_id(id, nombre)')
+        .or(`solicitante_id.eq.${uid},receptor_id.eq.${uid}`)
+        .eq('status', 'pendiente');
+      if (solicitudes?.length) {
+        const recibida = solicitudes.find(s => s.receptor_id === uid);
+        const enviada  = solicitudes.find(s => s.solicitante_id === uid);
+        setPartnerRequest(recibida || null);
+        setSentPartnerRequest(enviada || null);
+      } else {
+        setPartnerRequest(null);
+        setSentPartnerRequest(null);
+      }
+
       // Cargar RMs desde Supabase (fuente de verdad)
       const { data: rmsData } = await supabase
         .from('rms')
@@ -114,29 +132,71 @@ export function AppProvider({ children }) {
     finally { setLoadingProfile(false); }
   };
 
-  const setPartner = async (partnerId) => {
+  const sendPartnerRequest = async (friendId) => {
     try {
-      if (!userProfile?.id) return;
-      await supabase.from('usuarios').update({ partner_id: partnerId }).eq('id', userProfile.id);
-      setUserProfile(prev => ({ ...prev, partner_id: partnerId }));
-      const { data: pProfile } = await supabase
-        .from('usuarios_publicos').select('id, nombre, avatar_url').eq('id', partnerId).single();
-      if (pProfile) setPartnerProfile(pProfile);
-      const { data: pRes } = await supabase
-        .from('resultados').select('dia, resultado, notas, rx').eq('user_id', partnerId);
-      const pMap = {};
-      (pRes || []).forEach(r => { pMap[r.dia] = { resultado: r.resultado, notas: r.notas, rx: r.rx !== false }; });
-      setPartnerResultados(pMap);
-    } catch (e) {}
+      if (!userProfile?.id || friendId === userProfile.id) return { success: false };
+      const { error } = await supabase.from('solicitudes_partner').insert({
+        solicitante_id: userProfile.id,
+        receptor_id: friendId,
+      });
+      if (error) throw error;
+      // Notificación in-app
+      await supabase.from('notificaciones').insert({
+        user_id: friendId,
+        tipo: 'solicitud_partner',
+        titulo: '🤝 Solicitud de pareja',
+        mensaje: `${userProfile.nombre || 'Alguien'} quiere entrenar contigo como pareja`,
+        data: { from_user_id: userProfile.id },
+      });
+      // Push notification
+      const { data: dest } = await supabase.from('usuarios').select('push_token').eq('id', friendId).single();
+      if (dest?.push_token) {
+        await fetch('https://exp.host/--/api/v2/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: dest.push_token,
+            title: '🤝 Solicitud de pareja',
+            body: `${userProfile.nombre || 'Alguien'} quiere entrenar contigo como pareja`,
+            data: { type: 'partner_request', from: userProfile.id },
+          }),
+        });
+      }
+      await loadUserProfile(userProfile.id);
+      return { success: true };
+    } catch (e) { return { success: false, error: e.message }; }
+  };
+
+  const acceptPartnerRequest = async (requestId) => {
+    try {
+      await supabase.rpc('accept_partner_request', { p_request_id: requestId });
+      await loadUserProfile(userProfile.id);
+      return { success: true };
+    } catch (e) { return { success: false, error: e.message }; }
+  };
+
+  const rejectPartnerRequest = async (requestId) => {
+    try {
+      await supabase.from('solicitudes_partner').update({ status: 'rechazada' }).eq('id', requestId);
+      setPartnerRequest(null);
+      return { success: true };
+    } catch (e) { return { success: false, error: e.message }; }
+  };
+
+  const cancelPartnerRequest = async (requestId) => {
+    try {
+      await supabase.from('solicitudes_partner').update({ status: 'rechazada' }).eq('id', requestId);
+      setSentPartnerRequest(null);
+      return { success: true };
+    } catch (e) { return { success: false, error: e.message }; }
   };
 
   const removePartner = async () => {
     try {
-      if (!userProfile?.id) return;
-      await supabase.from('usuarios').update({ partner_id: null }).eq('id', userProfile.id);
-      setUserProfile(prev => ({ ...prev, partner_id: null }));
+      await supabase.rpc('remove_partner');
       setPartnerProfile(null);
       setPartnerResultados({});
+      setUserProfile(prev => ({ ...prev, partner_id: null }));
     } catch (e) {}
   };
 
@@ -158,6 +218,8 @@ export function AppProvider({ children }) {
       setUserProfile(null);
       setPartnerProfile(null);
       setPartnerResultados({});
+      setPartnerRequest(null);
+      setSentPartnerRequest(null);
       await AsyncStorage.multiRemove(['user_rms', 'user_resultados', 'user_wods_libres', 'user_nombre', 'user_genero']);
     } catch (e) {}
   };
@@ -269,7 +331,9 @@ export function AppProvider({ children }) {
       resultados, saveResultado,
       wodsLibres, saveWodLibre, deleteWodLibre,
       userProfile, loadingProfile, loadUserProfile,
-      partnerProfile, partnerResultados, setPartner, removePartner,
+      partnerProfile, partnerResultados,
+      partnerRequest, sentPartnerRequest,
+      sendPartnerRequest, acceptPartnerRequest, rejectPartnerRequest, cancelPartnerRequest, removePartner,
       isAdmin, isCoach, isAtleta,
       logout, completeOnboarding,
     }}>
