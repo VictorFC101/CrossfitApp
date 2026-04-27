@@ -362,6 +362,14 @@ export default function ProfileScreen() {
 
         {/* MI PAREJA */}
         <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>🤝 MI PAREJA</Text>
+        {/* DEBUG TEMPORAL — borrar tras confirmar */}
+        <Text style={{ fontSize: 10, color: 'orange', marginBottom: 4 }}>
+          DBG v2 | partner_id: {userProfile?.partner_id || 'null'} | partnerProfile: {partnerProfile ? partnerProfile.nombre : 'null'}
+        </Text>
+        <TouchableOpacity onPress={() => loadUserProfile(userProfile?.id)}
+          style={{ backgroundColor: '#ff990020', borderRadius: 8, padding: 8, marginBottom: 8, alignItems: 'center' }}>
+          <Text style={{ fontSize: 11, color: 'orange', fontWeight: '700' }}>Recargar pareja</Text>
+        </TouchableOpacity>
         <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 14, marginBottom: 12 }}>
 
           {/* SOLICITUD RECIBIDA */}
