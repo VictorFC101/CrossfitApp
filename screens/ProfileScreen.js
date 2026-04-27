@@ -435,7 +435,7 @@ export default function ProfileScreen() {
                   const amigo = a.solicitante?.id === myUserId ? a.receptor : a.solicitante;
                   if (!amigo) return null;
                   return (
-                    <TouchableOpacity key={i} onPress={() => sendPartnerRequest(amigo.id)}
+                    <TouchableOpacity key={i} onPress={() => sendPartnerRequest(amigo.id, amigo.nombre || amigo.email)}
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, marginBottom: 8 }}>
                       <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: t.accent + '20', alignItems: 'center', justifyContent: 'center' }}>
                         <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: t.accent }}>

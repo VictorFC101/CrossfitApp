@@ -132,37 +132,44 @@ export function AppProvider({ children }) {
     finally { setLoadingProfile(false); }
   };
 
-  const sendPartnerRequest = async (friendId) => {
+  const sendPartnerRequest = async (friendId, friendName) => {
     try {
       if (!userProfile?.id || friendId === userProfile.id) return { success: false };
-      const { error } = await supabase.from('solicitudes_partner').insert({
-        solicitante_id: userProfile.id,
-        receptor_id: friendId,
-      });
+      const { data: inserted, error } = await supabase
+        .from('solicitudes_partner')
+        .insert({ solicitante_id: userProfile.id, receptor_id: friendId })
+        .select()
+        .single();
       if (error) throw error;
-      // Notificación in-app
-      await supabase.from('notificaciones').insert({
+      // Actualización optimista — UI cambia de inmediato
+      setSentPartnerRequest({
+        id: inserted.id,
+        receptor: { id: friendId, nombre: friendName || 'Tu solicitud' },
+        status: 'pendiente',
+      });
+      // Notificación in-app (background)
+      supabase.from('notificaciones').insert({
         user_id: friendId,
         tipo: 'solicitud_partner',
         titulo: '🤝 Solicitud de pareja',
         mensaje: `${userProfile.nombre || 'Alguien'} quiere entrenar contigo como pareja`,
         data: { from_user_id: userProfile.id },
+      }).then(() => {});
+      // Push notification (background)
+      supabase.from('usuarios').select('push_token').eq('id', friendId).single().then(({ data: dest }) => {
+        if (dest?.push_token) {
+          fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: dest.push_token,
+              title: '🤝 Solicitud de pareja',
+              body: `${userProfile.nombre || 'Alguien'} quiere entrenar contigo como pareja`,
+              data: { type: 'partner_request', from: userProfile.id },
+            }),
+          });
+        }
       });
-      // Push notification
-      const { data: dest } = await supabase.from('usuarios').select('push_token').eq('id', friendId).single();
-      if (dest?.push_token) {
-        await fetch('https://exp.host/--/api/v2/push/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: dest.push_token,
-            title: '🤝 Solicitud de pareja',
-            body: `${userProfile.nombre || 'Alguien'} quiere entrenar contigo como pareja`,
-            data: { type: 'partner_request', from: userProfile.id },
-          }),
-        });
-      }
-      await loadUserProfile(userProfile.id);
       return { success: true };
     } catch (e) { return { success: false, error: e.message }; }
   };
@@ -176,17 +183,17 @@ export function AppProvider({ children }) {
   };
 
   const rejectPartnerRequest = async (requestId) => {
+    setPartnerRequest(null); // optimista
     try {
       await supabase.from('solicitudes_partner').update({ status: 'rechazada' }).eq('id', requestId);
-      setPartnerRequest(null);
       return { success: true };
     } catch (e) { return { success: false, error: e.message }; }
   };
 
   const cancelPartnerRequest = async (requestId) => {
+    setSentPartnerRequest(null); // optimista
     try {
       await supabase.from('solicitudes_partner').update({ status: 'rechazada' }).eq('id', requestId);
-      setSentPartnerRequest(null);
       return { success: true };
     } catch (e) { return { success: false, error: e.message }; }
   };
