@@ -226,14 +226,19 @@ export function AppProvider({ children }) {
   };
 
   const acceptPartnerRequest = async (requestId) => {
-    setPartnerRequest(null); // optimista: quita el banner inmediatamente
+    // Optimista: limpiar ambas solicitudes y mostrar pareja inmediatamente
+    const solicitante = partnerRequest?.solicitante;
+    setPartnerRequest(null);
+    setSentPartnerRequest(null);
+    if (solicitante) setPartnerProfile({ id: solicitante.id, nombre: solicitante.nombre, avatar_url: null });
     try {
       const { error } = await supabase.rpc('accept_partner_request', { p_request_id: requestId });
       if (error) throw error;
-      await loadUserProfile(userProfile.id);
+      await loadUserProfile(userProfile.id); // sincronizar con el estado real
       return { success: true };
     } catch (e) {
-      await loadUserProfile(userProfile.id); // restaurar estado real si falló
+      setPartnerProfile(null);
+      await loadUserProfile(userProfile.id);
       return { success: false, error: e.message };
     }
   };
