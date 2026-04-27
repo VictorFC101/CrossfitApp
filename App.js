@@ -46,7 +46,7 @@ function AppInner() {
   const [loading, setLoading] = useState(true);
   const Screen = SCREENS[active];
   const t = useTheme();
-  const { userProfile, loadingProfile } = useApp();
+  const { userProfile, loadingProfile, onboardingCompleted } = useApp();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -72,7 +72,7 @@ function AppInner() {
     return <AuthScreen onAuth={() => {}} />;
   }
 
-  if (userProfile && !userProfile.onboarding_completed) {
+  if (userProfile && !onboardingCompleted) {
     return <OnboardingScreen onComplete={() => {}} />;
   }
   return (

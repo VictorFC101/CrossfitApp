@@ -10,6 +10,7 @@ export function AppProvider({ children }) {
   const [wodsLibres, setWodsLibres] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [partnerProfile, setPartnerProfile] = useState(null);
   const [partnerResultados, setPartnerResultados] = useState({});
   const [partnerRequest, setPartnerRequest] = useState(null);     // solicitud recibida pendiente
@@ -32,9 +33,11 @@ export function AppProvider({ children }) {
       const storedRms = await AsyncStorage.getItem('user_rms');
       const storedResultados = await AsyncStorage.getItem('user_resultados');
       const storedWods = await AsyncStorage.getItem('user_wods_libres');
+      const storedOnboarding = await AsyncStorage.getItem('@crossfit_onboarding_done');
       if (storedRms) setRms(JSON.parse(storedRms));
       if (storedResultados) setResultados(JSON.parse(storedResultados));
       if (storedWods) setWodsLibres(JSON.parse(storedWods));
+      if (storedOnboarding === '1') setOnboardingCompleted(true);
     } catch (e) {}
   };
 
@@ -218,9 +221,9 @@ export function AppProvider({ children }) {
   };
 
   const completeOnboarding = async () => {
-    // Guardar en AsyncStorage primero como fallback local garantizado
     await AsyncStorage.setItem('@crossfit_onboarding_done', '1').catch(() => {});
-    setUserProfile(prev => ({ ...prev, onboarding_completed: true }));
+    setOnboardingCompleted(true);
+    setUserProfile(prev => prev ? { ...prev, onboarding_completed: true } : prev);
     try {
       if (userProfile?.id) {
         await supabase.from('usuarios').update({ onboarding_completed: true }).eq('id', userProfile.id);
@@ -349,7 +352,7 @@ export function AppProvider({ children }) {
       rms, saveRM,
       resultados, saveResultado,
       wodsLibres, saveWodLibre, deleteWodLibre,
-      userProfile, loadingProfile, loadUserProfile,
+      userProfile, loadingProfile, loadUserProfile, onboardingCompleted,
       partnerProfile, partnerResultados,
       partnerRequest, sentPartnerRequest,
       sendPartnerRequest, acceptPartnerRequest, rejectPartnerRequest, cancelPartnerRequest, removePartner,
