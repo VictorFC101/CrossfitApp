@@ -86,6 +86,9 @@ function ShareCard({ day, resultado, notas, rx, acento }) {
             <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#ffffff08', borderLeftWidth: 2, borderLeftColor: acento, borderRadius: 6, paddingVertical: 5, paddingHorizontal: 10 }}>
               <Text style={{ fontSize: 12, fontWeight: '800', color: acento, minWidth: 32 }}>{m.reps}</Text>
               <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff', flex: 1 }} numberOfLines={1}>{m.name}</Text>
+              {m.weight && m.weight !== 'BW' && (
+                <Text style={{ fontSize: 10, color: '#ffffff55', fontWeight: '600' }}>{m.weight}</Text>
+              )}
             </View>
           ))}
         </View>
