@@ -226,11 +226,16 @@ export function AppProvider({ children }) {
   };
 
   const acceptPartnerRequest = async (requestId) => {
+    setPartnerRequest(null); // optimista: quita el banner inmediatamente
     try {
-      await supabase.rpc('accept_partner_request', { p_request_id: requestId });
+      const { error } = await supabase.rpc('accept_partner_request', { p_request_id: requestId });
+      if (error) throw error;
       await loadUserProfile(userProfile.id);
       return { success: true };
-    } catch (e) { return { success: false, error: e.message }; }
+    } catch (e) {
+      await loadUserProfile(userProfile.id); // restaurar estado real si falló
+      return { success: false, error: e.message };
+    }
   };
 
   const rejectPartnerRequest = async (requestId) => {
