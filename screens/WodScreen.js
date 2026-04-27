@@ -94,32 +94,29 @@ function ShareCard({ day, resultado, notas, rx, acento }) {
       {/* Separador */}
       <View style={{ height: 1, backgroundColor: '#ffffff12', marginHorizontal: 20, marginBottom: 16 }} />
 
-      {/* Bloques resultado — Podio */}
-      <View style={{ paddingHorizontal: 20, paddingBottom: 14 }}>
-        {hasNone && !!resultado ? (
-          <View style={{ backgroundColor: acento + '12', borderWidth: 1, borderColor: acento + '30', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 10 }}>
-            <Text style={{ fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: 1 }} numberOfLines={1} adjustsFontSizeToFit>{resultado}</Text>
-            <Text style={{ fontSize: 9, color: acento, letterSpacing: 2, fontWeight: '700', marginTop: 6 }}>RESULTADO</Text>
-          </View>
-        ) : (
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-            {timePart ? (
-              <View style={{ flex: 1, backgroundColor: acento + '12', borderWidth: 1, borderColor: acento + '30', borderRadius: 12, paddingVertical: 14, alignItems: 'center', overflow: 'hidden' }}>
-                <Text style={{ fontSize: hasBoth ? 26 : 34, fontWeight: '900', color: '#fff', letterSpacing: 1 }} numberOfLines={1} adjustsFontSizeToFit>{timePart}</Text>
-                <Text style={{ fontSize: 9, color: acento, letterSpacing: 2, fontWeight: '700', marginTop: 6 }}>TIEMPO</Text>
-              </View>
-            ) : null}
-            {roundsSeg ? (
-              <View style={{ flex: 1, backgroundColor: acento + '12', borderWidth: 1, borderColor: acento + '30', borderRadius: 12, paddingVertical: 14, alignItems: 'center', overflow: 'hidden' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2 }}>
-                  <Text style={{ fontSize: hasBoth ? 26 : 34, fontWeight: '900', color: '#fff' }} numberOfLines={1}>{ron}</Text>
-                  <Text style={{ fontSize: hasBoth ? 16 : 20, fontWeight: '700', color: '#ffffff55', paddingBottom: 3 }} numberOfLines={1}>+{rep}</Text>
-                </View>
-                <Text style={{ fontSize: 9, color: acento, letterSpacing: 2, fontWeight: '700', marginTop: 6 }}>RONDAS + REPS</Text>
-              </View>
-            ) : null}
-          </View>
-        )}
+      {/* Bloques resultado — siempre ambos, apilados */}
+      <View style={{ paddingHorizontal: 20, paddingBottom: 14, gap: 8 }}>
+
+        {/* TIEMPO */}
+        <View style={{ backgroundColor: acento + '12', borderWidth: 1, borderColor: acento + '30', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}>
+          <Text style={{ fontSize: 34, fontWeight: '900', color: timePart ? '#fff' : '#ffffff20', letterSpacing: 1 }} numberOfLines={1} adjustsFontSizeToFit>
+            {timePart || '—'}
+          </Text>
+          <Text style={{ fontSize: 9, color: acento, letterSpacing: 2, fontWeight: '700', marginTop: 6 }}>TIEMPO</Text>
+        </View>
+
+        {/* RONDAS + REPS */}
+        <View style={{ backgroundColor: acento + '12', borderWidth: 1, borderColor: acento + '30', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}>
+          {roundsSeg ? (
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4 }}>
+              <Text style={{ fontSize: 34, fontWeight: '900', color: '#fff' }} numberOfLines={1}>{ron}</Text>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#ffffff55', paddingBottom: 4 }} numberOfLines={1}>+{rep}</Text>
+            </View>
+          ) : (
+            <Text style={{ fontSize: 34, fontWeight: '900', color: '#ffffff20' }}>—</Text>
+          )}
+          <Text style={{ fontSize: 9, color: acento, letterSpacing: 2, fontWeight: '700', marginTop: 6 }}>RONDAS + REPS</Text>
+        </View>
 
         {/* Rx / Scaled */}
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
