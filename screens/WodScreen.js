@@ -85,10 +85,12 @@ function ShareCard({ day, resultado, notas, rx, acento }) {
           {movements.map((m, i) => (
             <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#ffffff08', borderLeftWidth: 2, borderLeftColor: acento, borderRadius: 6, paddingVertical: 5, paddingHorizontal: 10 }}>
               <Text style={{ fontSize: 12, fontWeight: '800', color: acento, minWidth: 32 }}>{m.reps}</Text>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff', flex: 1 }} numberOfLines={1}>{m.name}</Text>
-              {m.weight && m.weight !== 'BW' && (
-                <Text style={{ fontSize: 10, color: '#ffffff55', fontWeight: '600' }}>{m.weight}</Text>
-              )}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }} numberOfLines={1}>{m.name}</Text>
+                {m.weight && m.weight !== 'BW' && (
+                  <Text style={{ fontSize: 10, color: '#ffffff55', fontWeight: '600', marginTop: 2 }}>{m.weight}</Text>
+                )}
+              </View>
             </View>
           ))}
         </View>
@@ -183,20 +185,21 @@ export default function WodScreen({ navigate }) {
   const todayInProgram = allDaysFlat.length > 0 && isTodayInProgram(allDaysFlat);
   const day = allDaysFlat.length > 0 ? getTodayDay(allDaysFlat) : null;
 
+  const savedResult = day ? resultados[day.day] : null;
+
   useEffect(() => {
-    const res = day ? resultados[day.day] : null;
-    setNotas(res?.notas || '');
-    setRx(res?.rx !== false);
-    const r = res?.resultado || '';
+    setNotas(savedResult?.notas || '');
+    setRx(savedResult?.rx !== false);
+    const r = savedResult?.resultado || '';
     setResultado(r);
     const segs = r.split(' · ');
-    const roundsPart = segs.find(s => s.includes('+')) || '';
-    const timePart   = segs.find(s => /^\d{1,2}:\d{2}$/.test(s)) || '';
+    const roundsPart = segs.find(s => /^\d+\+\d+$/.test(s.trim())) || '';
+    const timePart   = segs.find(s => /^\d{1,2}:\d{2}$/.test(s.trim())) || '';
     if (roundsPart) { const [ron, rep] = roundsPart.split('+'); setRondas(ron || ''); setRepsExtra(rep || ''); }
     else { setRondas(''); setRepsExtra(''); }
     if (timePart) { const [min, sec] = timePart.split(':'); setMinutos(min || ''); setSegundos(sec || ''); }
     else { setMinutos(''); setSegundos(''); }
-  }, [day?.day]);
+  }, [savedResult]);
 
   const guardar = async () => {
     if (!day) return;
