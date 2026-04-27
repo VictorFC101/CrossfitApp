@@ -449,14 +449,19 @@ export default function WodScreen({ navigate }) {
             const inputBase = { backgroundColor: t.dark ? '#080e0a' : '#fff', borderWidth: 1, borderColor: t.dark ? '#1a3a1e' : '#c8e6c9', borderRadius: 8, color: t.dark ? '#81c784' : '#2e7d32', fontWeight: '700', padding: 12 };
             const ph = t.dark ? '#2a4a2e' : '#81c784';
             if (fmt === 'amrap') return (
-              <View style={{ marginBottom: 12 }}>
-                <Text style={{ fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>RONDAS + REPS EXTRA</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6, textAlign: 'center' }}>RONDAS</Text>
                   <TextInput value={rondas} onChangeText={setRondas} keyboardType="numeric" placeholder="0" placeholderTextColor={ph}
-                    style={[inputBase, { flex: 1, textAlign: 'center', fontSize: t.fs(28) }]} />
+                    style={[inputBase, { textAlign: 'center', fontSize: t.fs(32) }]} />
+                </View>
+                <View style={{ alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 }}>
                   <Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>+</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6, textAlign: 'center' }}>REPS EXTRA</Text>
                   <TextInput value={repsExtra} onChangeText={setRepsExtra} keyboardType="numeric" placeholder="0" placeholderTextColor={ph}
-                    style={[inputBase, { flex: 1, textAlign: 'center', fontSize: t.fs(28) }]} />
+                    style={[inputBase, { textAlign: 'center', fontSize: t.fs(32) }]} />
                 </View>
               </View>
             );
