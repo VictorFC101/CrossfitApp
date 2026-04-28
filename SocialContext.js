@@ -236,6 +236,18 @@ export function SocialProvider({ children }) {
 
   const refreshFeed = () => loadFeed();
 
+  const deleteFeedItem = async (id) => {
+    // Optimista: quitar del estado local inmediatamente
+    setFeed(prev => prev.filter(f => f.id !== id));
+    try {
+      const { error } = await supabase.from('feed_actividad').delete().eq('id', id);
+      if (error) throw error;
+    } catch (e) {
+      // Revertir si falla
+      await loadFeed();
+    }
+  };
+
   return (
     <SocialContext.Provider value={{
       feed, loadingFeed, refreshFeed,
@@ -244,7 +256,7 @@ export function SocialProvider({ children }) {
       enviarSolicitud, aceptarSolicitud,
       rechazarSolicitud, eliminarAmistad,
       esAmigo, getAmigoData,
-      publicarActividad,
+      publicarActividad, deleteFeedItem,
       TIPO_ICONS, TIPO_LABELS,
     }}>
       {children}

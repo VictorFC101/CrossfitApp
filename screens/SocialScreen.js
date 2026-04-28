@@ -22,7 +22,7 @@ function Avatar({ nombre, color, size = 40, t }) {
   );
 }
 
-function FeedItem({ item, t, TIPO_ICONS, TIPO_LABELS, getAmigoData, myUserId, onReaction, onComment, onDeleteComment }) {
+function FeedItem({ item, t, TIPO_ICONS, TIPO_LABELS, getAmigoData, myUserId, onReaction, onComment, onDeleteComment, onDeleteFeedItem }) {
   const amigoData = getAmigoData(item);
   const isMe = item.user_id === myUserId;
   const accentColor = isMe ? t.accent : '#4895ef';
@@ -87,7 +87,17 @@ function FeedItem({ item, t, TIPO_ICONS, TIPO_LABELS, getAmigoData, myUserId, on
             {TIPO_ICONS[item.tipo]} {TIPO_LABELS[item.tipo]}
           </Text>
         </View>
-        <Text style={{ fontSize: t.fs(10), color: t.text3 }}>{timeAgo(item.created_at)}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={{ fontSize: t.fs(10), color: t.text3 }}>{timeAgo(item.created_at)}</Text>
+          {isMe && (
+            <TouchableOpacity onPress={() => Alert.alert('Eliminar publicación', '¿Seguro que quieres eliminar esta publicación?', [
+              { text: 'Cancelar', style: 'cancel' },
+              { text: 'Eliminar', style: 'destructive', onPress: () => onDeleteFeedItem(item.id) },
+            ])}>
+              <Text style={{ fontSize: t.fs(14), color: t.text3 }}>🗑️</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <View style={{ backgroundColor: t.bg4, borderRadius: 8, padding: 12, marginBottom: 10 }}>
@@ -353,7 +363,7 @@ export default function SocialScreen() {
     );
   }
 
-  const { feed, loadingFeed, refreshFeed, getAmigoData, myUserId, TIPO_ICONS, TIPO_LABELS, solicitudesPendientes } = social;
+  const { feed, loadingFeed, refreshFeed, getAmigoData, myUserId, TIPO_ICONS, TIPO_LABELS, solicitudesPendientes, deleteFeedItem } = social;
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -489,6 +499,7 @@ export default function SocialScreen() {
                   onReaction={handleReaction}
                   onComment={setCommentTarget}
                   onDeleteComment={handleDeleteComment}
+                  onDeleteFeedItem={deleteFeedItem}
                 />
               ))
             )}
