@@ -314,7 +314,12 @@ export function AppProvider({ children }) {
           peso: pesoNum,
           fecha: fechaISO,
         });
-        // Feed social
+        // Feed social — reemplazar entrada anterior del mismo movimiento
+        await supabase.from('feed_actividad')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('tipo', 'rm_nuevo')
+          .filter('data->>movimiento', 'eq', key);
         await supabase.from('feed_actividad').insert({
           user_id: user.id,
           tipo: 'rm_nuevo',
