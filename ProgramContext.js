@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { plan as legacyDefaultPlan } from './data';
 import { parseDateFromDay } from './dateUtils';
@@ -91,10 +92,42 @@ function rowToProgram(row) {
 export function ProgramProvider({ children }) {
   const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const channelRef = useRef(null);
+  const appStateRef = useRef(AppState.currentState);
+  const appStateSubRef = useRef(null);
 
   useEffect(() => {
     loadPrograms();
+    initRealtime();
+
+    // AppState: recargar al volver al primer plano
+    appStateSubRef.current = AppState.addEventListener('change', (nextState) => {
+      if (appStateRef.current !== 'active' && nextState === 'active') {
+        loadPrograms();
+      }
+      appStateRef.current = nextState;
+    });
+
+    return () => {
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
+      if (appStateSubRef.current) appStateSubRef.current.remove();
+    };
   }, []);
+
+  const initRealtime = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    if (channelRef.current) supabase.removeChannel(channelRef.current);
+    channelRef.current = supabase
+      .channel(`asignaciones-${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'asignaciones',
+        filter: `user_id=eq.${user.id}`,
+      }, () => { loadPrograms(); })
+      .subscribe();
+  };
 
   const loadPrograms = async () => {
     try {
