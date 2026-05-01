@@ -134,7 +134,14 @@ export function ProgramProvider({ children }) {
   const initRealtime = (uid) => {
     if (channelRef.current) supabase.removeChannel(channelRef.current);
     channelRef.current = supabase
-      .channel(`asignaciones-${uid}`)
+      .channel(`programas-realtime-${uid}`)
+      // Cambio en cualquier programa público → recargar para todos
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'programas',
+      }, () => { loadPrograms(); })
+      // Nueva asignación específica para este usuario
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
