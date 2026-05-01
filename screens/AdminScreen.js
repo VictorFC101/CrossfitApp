@@ -163,9 +163,10 @@ function AddJsonModal({ visible, onClose, onSave }) {
   const [error, setError] = useState('');
   const [preview, setPreview] = useState(null);
   const [fileName, setFileName] = useState('');
+  const [programName, setProgramName] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const reset = () => { setError(''); setPreview(null); setFileName(''); };
+  const reset = () => { setError(''); setPreview(null); setFileName(''); setProgramName(''); };
 
   const pickFile = async () => {
     setLoading(true);
@@ -210,7 +211,9 @@ function AddJsonModal({ visible, onClose, onSave }) {
       for (const w of parsed.weeks) {
         if (!w.days || !Array.isArray(w.days)) throw new Error('Cada semana necesita un array "days"');
       }
-      setPreview(stripProgramDates(parsed));
+      const stripped = stripProgramDates(parsed);
+      setPreview(stripped);
+      setProgramName(stripped.name || '');
       setError('');
     } catch (e) {
       setError(e.message);
@@ -222,7 +225,8 @@ function AddJsonModal({ visible, onClose, onSave }) {
 
   const handleSave = () => {
     if (!preview) return;
-    onSave(preview);
+    if (!programName.trim()) { setError('El nombre del programa es obligatorio'); return; }
+    onSave({ ...preview, name: programName.trim() });
     reset();
     onClose();
   };
@@ -264,19 +268,37 @@ function AddJsonModal({ visible, onClose, onSave }) {
           ) : null}
 
           {preview ? (
-            <View style={{ backgroundColor: '#52b78820', borderRadius: 8, padding: 14, marginBottom: 16 }}>
-              <Text style={{ color: '#52b788', fontSize: t.fs(12), fontWeight: '700', marginBottom: 6 }}>✅ Programa listo para guardar</Text>
-              <Text style={{ color: '#52b788', fontSize: t.fs(11), marginBottom: 2 }}>
-                {preview.name || 'Sin nombre'} · {preview.weeks.length} semanas
-              </Text>
-              <Text style={{ color: '#52b788', fontSize: t.fs(11) }}>
-                {preview.weeks.reduce((a, w) => a + w.days.length, 0)} días · Fechas eliminadas
-              </Text>
-            </View>
+            <>
+              <View style={{ backgroundColor: '#52b78820', borderRadius: 8, padding: 14, marginBottom: 16 }}>
+                <Text style={{ color: '#52b788', fontSize: t.fs(12), fontWeight: '700', marginBottom: 6 }}>✅ Archivo válido</Text>
+                <Text style={{ color: '#52b788', fontSize: t.fs(11), marginBottom: 2 }}>
+                  {preview.weeks.length} semanas · {preview.weeks.reduce((a, w) => a + w.days.length, 0)} días · Fechas eliminadas
+                </Text>
+              </View>
+
+              <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>NOMBRE DEL PROGRAMA</Text>
+              <TextInput
+                value={programName}
+                onChangeText={setProgramName}
+                placeholder="Ej: CrossFit Mayo 2026"
+                placeholderTextColor={t.text3}
+                style={{
+                  backgroundColor: t.bg4,
+                  borderWidth: 2,
+                  borderColor: programName.trim() ? t.accent : t.border,
+                  borderRadius: 10,
+                  color: t.text,
+                  fontSize: t.fs(15),
+                  fontWeight: '700',
+                  padding: 14,
+                  marginBottom: 16,
+                }}
+              />
+            </>
           ) : null}
 
-          <TouchableOpacity onPress={handleSave} disabled={!preview}
-            style={{ backgroundColor: preview ? t.accent : t.border, borderRadius: 10, padding: 16, alignItems: 'center' }}>
+          <TouchableOpacity onPress={handleSave} disabled={!preview || !programName.trim()}
+            style={{ backgroundColor: (preview && programName.trim()) ? t.accent : t.border, borderRadius: 10, padding: 16, alignItems: 'center' }}>
             <Text style={{ fontSize: t.fs(13), fontWeight: '900', color: '#fff' }}>💾 GUARDAR EN TODOS LOS PROGRAMAS</Text>
           </TouchableOpacity>
         </ScrollView>
