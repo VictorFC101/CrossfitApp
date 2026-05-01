@@ -273,9 +273,9 @@ export default function HomeScreen({ navigate }) {
     );
   };
 
-  // Calcular allDays desde el programa activo
-  // Solo mostrar si tiene fechas reales Y hay una asignación activa en Supabase
-  const plan = (activeProgram?._meta?.start && hasActiveAsignacion) ? activeProgram : null;
+  // Mostrar programa si existe y tiene fechas — optimista mientras se verifica asignación (null).
+  // Solo ocultar si se confirma explícitamente que no hay asignación activa (false).
+  const plan = (activeProgram?._meta?.start && hasActiveAsignacion !== false) ? activeProgram : null;
   const allDays = plan ? plan.weeks.flatMap((w, wi) =>
     w.days.map((d, di) => ({ ...d, weekIndex: wi, dayIndex: di, weekNumber: w.number, weekFocus: w.focus }))
   ) : [];
@@ -293,7 +293,7 @@ export default function HomeScreen({ navigate }) {
     setShowFreeDay(!isTodayInProgram(allDays));
   }
 
-  if (loading) {
+  if (loading || hasActiveAsignacion === null) {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center' }}>
         <Text style={{ color: t.text3, fontSize: t.fs(12), letterSpacing: 2 }}>CARGANDO...</Text>
