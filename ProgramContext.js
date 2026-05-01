@@ -98,7 +98,6 @@ export function ProgramProvider({ children }) {
 
   useEffect(() => {
     loadPrograms();
-    initRealtime();
 
     // AppState: recargar al volver al primer plano
     appStateSubRef.current = AppState.addEventListener('change', (nextState) => {
@@ -108,23 +107,39 @@ export function ProgramProvider({ children }) {
       appStateRef.current = nextState;
     });
 
+    // Realtime: esperar a que auth esté lista antes de suscribir
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        initRealtime(session.user.id);
+      } else {
+        if (channelRef.current) {
+          supabase.removeChannel(channelRef.current);
+          channelRef.current = null;
+        }
+      }
+    });
+
+    // Intentar también con sesión actual (por si ya estaba autenticado)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) initRealtime(session.user.id);
+    });
+
     return () => {
+      authSub.unsubscribe();
       if (channelRef.current) supabase.removeChannel(channelRef.current);
       if (appStateSubRef.current) appStateSubRef.current.remove();
     };
   }, []);
 
-  const initRealtime = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+  const initRealtime = (uid) => {
     if (channelRef.current) supabase.removeChannel(channelRef.current);
     channelRef.current = supabase
-      .channel(`asignaciones-${user.id}`)
+      .channel(`asignaciones-${uid}`)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'asignaciones',
-        filter: `user_id=eq.${user.id}`,
+        filter: `user_id=eq.${uid}`,
       }, () => { loadPrograms(); })
       .subscribe();
   };
