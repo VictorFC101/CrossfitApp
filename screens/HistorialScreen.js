@@ -6,6 +6,7 @@ import { useProgram } from '../ProgramContext';
 import { useSocial } from '../SocialContext';
 import { MOVEMENTS_DB, CATEGORIES, CATEGORY_COLORS } from '../movements_db';
 import { RM_NAMES, TYPE_COLORS as SHARED_TYPE_COLORS } from '../constants';
+import { parseDateFromDay } from '../dateUtils';
 
 const rmNames = RM_NAMES;
 
@@ -277,7 +278,7 @@ function WodCreator({ visible, onClose, onSave }) {
 export default function HistorialScreen() {
   const { resultados, rms, saveResultado, wodsLibres, saveWodLibre, deleteWodLibre, partnerProfile, partnerResultados } = useApp();
   const t = useTheme();
-  const { activeProgram } = useProgram();
+  const { activeProgram, programs } = useProgram();
   const { feed, esAmigo } = useSocial();
   const [expanded, setExpanded] = useState(null);
   const [tab, setTab] = useState('yo');
@@ -285,16 +286,33 @@ export default function HistorialScreen() {
   const [filterTipo, setFilterTipo] = useState(null);
   const [filterFormato, setFilterFormato] = useState(null);
 
-  const allDays = activeProgram
+  // Combine days from ALL programs so history from previous blocks appears
+  const allDays = programs.length > 0
+    ? programs
+        .flatMap((prog, pi) =>
+          prog.weeks.flatMap((w, wi) =>
+            w.days.map((d, di) => ({ ...d, weekIndex: wi, dayIndex: di, weekNumber: w.number }))
+          )
+        )
+        .sort((a, b) => {
+          const da = parseDateFromDay(a.day);
+          const db = parseDateFromDay(b.day);
+          if (!da || !db) return 0;
+          return db.getTime() - da.getTime();
+        })
+    : [];
+
+  // Pending days = only active program (makes sense to track pending for current block)
+  const activeDays = activeProgram
     ? activeProgram.weeks.flatMap((w, wi) =>
-        w.days.map((d, di) => ({ ...d, weekIndex: wi, dayIndex: di, weekNumber: w.number }))
+        w.days.map((d, di) => ({ ...d, weekIndex: wi, dayIndex: di }))
       )
     : [];
 
   const typeColors = SHARED_TYPE_COLORS;
 
   const diasConResultado = allDays.filter(d => resultados[d.day]);
-  const diasSinResultado = allDays.filter(d => !resultados[d.day] && d.type !== 'Libre');
+  const diasSinResultado = activeDays.filter(d => !resultados[d.day] && d.type !== 'Libre');
 
   const tiposEnPrograma = [...new Set(allDays.map(d => d.type).filter(Boolean))];
 
