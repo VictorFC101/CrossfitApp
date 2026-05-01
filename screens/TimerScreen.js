@@ -39,11 +39,15 @@ export default function TimerScreen() {
   const [editing, setEditing] = useState(false);
   const [synced, setSynced] = useState(false);
   const intervalRef = useRef(null);
+
+  // Module-level: auto-sync once per unique WOD day, survives tab switches
   const autoSynced = useRef(false);
 
-  // Auto-sincronizar timer con el WOD del día (solo una vez al cargar)
+  // Auto-sincronizar timer con el WOD del día (solo una vez por día)
   useEffect(() => {
-    if (autoSynced.current || !todayDay?.wod?.type) return;
+    if (!todayDay?.wod?.type) return;
+    // Use module-level key so re-mounting (tab switch) doesn't re-sync
+    if (autoSynced.current === todayDay.day) return;
     const { type, duration } = todayDay.wod;
     const typeUpper = (type || '').toUpperCase();
 
@@ -53,7 +57,7 @@ export default function TimerScreen() {
       if (mins) { setCustomMins(String(mins)); setSeconds(mins * 60); }
       setRounds(0);
       setRunning(false);
-      autoSynced.current = true;
+      autoSynced.current = todayDay.day;
       setSynced(true);
     } else if (typeUpper.includes('EMOM')) {
       const emom = parseEmom(duration);
@@ -68,7 +72,7 @@ export default function TimerScreen() {
       }
       setCurrentEmomRound(1);
       setRunning(false);
-      autoSynced.current = true;
+      autoSynced.current = todayDay.day;
       setSynced(true);
     } else if (typeUpper.includes('FOR TIME') || typeUpper.includes('TIMECAP') || typeUpper.includes('TIME CAP')) {
       const mins = parseMins(duration);
@@ -76,7 +80,7 @@ export default function TimerScreen() {
       if (mins) { setCustomMins(String(mins)); setSeconds(mins * 60); }
       setRounds(0);
       setRunning(false);
-      autoSynced.current = true;
+      autoSynced.current = todayDay.day;
       setSynced(true);
     }
   }, [todayDay]);
@@ -213,15 +217,26 @@ export default function TimerScreen() {
         )}
 
         {mode === 'EMOM' && (
-          <View style={{ backgroundColor: accentColor + '12', borderWidth: 1, borderColor: accentColor + '40', borderRadius: 12, padding: 14, width: '100%', marginBottom: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View>
-              <Text style={{ fontSize: t.fs(10), color: accentColor, letterSpacing: 2, fontWeight: '700' }}>RONDA ACTUAL</Text>
-              <Text style={{ fontSize: t.fs(36), fontWeight: '900', color: t.text, marginTop: 2 }}>{currentEmomRound} <Text style={{ fontSize: t.fs(16), color: t.text3 }}>/ {totalRounds}</Text></Text>
+          <View style={{ backgroundColor: accentColor + '12', borderWidth: 1, borderColor: accentColor + '40', borderRadius: 12, padding: 14, width: '100%', marginBottom: 20 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <View>
+                <Text style={{ fontSize: t.fs(10), color: accentColor, letterSpacing: 2, fontWeight: '700' }}>RONDA ACTUAL</Text>
+                <Text style={{ fontSize: t.fs(36), fontWeight: '900', color: t.text, marginTop: 2 }}>
+                  {currentEmomRound} <Text style={{ fontSize: t.fs(16), color: t.text3 }}>/ {totalRounds}</Text>
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 1 }}>TOTAL</Text>
+                <Text style={{ fontSize: t.fs(20), fontWeight: '900', color: accentColor }}>{parseInt(emomMins || 0) * parseInt(emomRounds || 0)} min</Text>
+              </View>
             </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 1 }}>TOTAL</Text>
-              <Text style={{ fontSize: t.fs(20), fontWeight: '900', color: accentColor }}>{parseInt(emomMins || 0) * parseInt(emomRounds || 0)} min</Text>
+            {/* Barra de progreso total del EMOM */}
+            <View style={{ height: 6, backgroundColor: t.bg4, borderRadius: 3, overflow: 'hidden' }}>
+              <View style={{ height: 6, width: `${Math.min(((currentEmomRound - 1) / totalRounds) * 100, 100)}%`, backgroundColor: accentColor, borderRadius: 3 }} />
             </View>
+            <Text style={{ fontSize: t.fs(9), color: t.text3, marginTop: 4, textAlign: 'right' }}>
+              {Math.round(((currentEmomRound - 1) / totalRounds) * 100)}% completado
+            </Text>
           </View>
         )}
 
@@ -235,6 +250,9 @@ export default function TimerScreen() {
             transform: [{ rotate: '-90deg' }] }} />
           <Text style={{ fontSize: t.fs(52), fontWeight: '900', color: running ? t.text : t.text2, letterSpacing: 2 }}>{display}</Text>
           <Text style={{ fontSize: t.fs(10), color: seconds === 0 ? '#52b788' : t.text3, letterSpacing: 3, marginTop: 4 }}>{timerStatus}</Text>
+          {mode === 'EMOM' && (
+            <Text style={{ fontSize: t.fs(9), color: accentColor + '99', letterSpacing: 2, marginTop: 2 }}>INTERVALO</Text>
+          )}
         </View>
 
         <View style={{ flexDirection: 'row', gap: 20, alignItems: 'center', marginBottom: 32 }}>
@@ -244,9 +262,21 @@ export default function TimerScreen() {
           <TouchableOpacity onPress={toggle} style={{ width: 74, height: 74, borderRadius: 37, backgroundColor: seconds === 0 ? t.border : accentColor, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontSize: t.fs(28), color: '#fff' }}>{running ? '⏸' : '▶'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setRounds(r => r + 1)} style={{ width: 54, height: 54, borderRadius: 27, borderWidth: 2, borderColor: accentColor, backgroundColor: accentColor + '15', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: t.fs(18), color: accentColor, fontWeight: '700' }}>+1</Text>
-          </TouchableOpacity>
+          {mode === 'EMOM' ? (
+            <TouchableOpacity onPress={() => {
+              setCurrentEmomRound(r => {
+                if (r >= totalRounds) return r;
+                return r + 1;
+              });
+              setSeconds(emomRoundSecs);
+            }} style={{ width: 54, height: 54, borderRadius: 27, borderWidth: 2, borderColor: accentColor, backgroundColor: accentColor + '15', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: t.fs(14), color: accentColor, fontWeight: '700', textAlign: 'center' }}>{'▶▶'}</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={() => setRounds(r => r + 1)} style={{ width: 54, height: 54, borderRadius: 27, borderWidth: 2, borderColor: accentColor, backgroundColor: accentColor + '15', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: t.fs(18), color: accentColor, fontWeight: '700' }}>+1</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {mode !== 'EMOM' && (
