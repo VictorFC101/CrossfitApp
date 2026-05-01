@@ -96,11 +96,8 @@ export function AppProvider({ children }) {
       // Cargar perfil y resultados del partner
       const partnerId = privateData?.partner_id;
       if (partnerId) {
-        const { data: pProfile } = await supabase
-          .from('usuarios_publicos')
-          .select('id, nombre, avatar_url')
-          .eq('id', partnerId)
-          .single();
+        const { data: pData } = await supabase.rpc('get_user_public_info', { p_user_id: partnerId });
+        const pProfile = pData?.[0] || null;
         if (pProfile) setPartnerProfile(pProfile);
 
         const { data: pRes } = await supabase
@@ -152,7 +149,9 @@ export function AppProvider({ children }) {
       const { data: resData } = await supabase
         .from('resultados')
         .select('dia, resultado, notas, fecha, rx, adaptacion')
-        .eq('user_id', uid);
+        .eq('user_id', uid)
+        .order('fecha', { ascending: false, nullsFirst: false })
+        .limit(365);
       if (resData?.length) {
         const resMap = {};
         resData.forEach(r => { resMap[r.dia] = { resultado: r.resultado, notas: r.notas, fecha: r.fecha, rx: r.rx !== false, adaptacion: r.adaptacion || null }; });
@@ -226,11 +225,21 @@ export function AppProvider({ children }) {
   };
 
   const acceptPartnerRequest = async (requestId) => {
+    // Optimista: limpiar ambas solicitudes y mostrar pareja inmediatamente
+    const solicitante = partnerRequest?.solicitante;
+    setPartnerRequest(null);
+    setSentPartnerRequest(null);
+    if (solicitante) setPartnerProfile({ id: solicitante.id, nombre: solicitante.nombre, avatar_url: null });
     try {
-      await supabase.rpc('accept_partner_request', { p_request_id: requestId });
-      await loadUserProfile(userProfile.id);
+      const { error } = await supabase.rpc('accept_partner_request', { p_request_id: requestId });
+      if (error) throw error;
+      await loadUserProfile(userProfile.id); // sincronizar con el estado real
       return { success: true };
-    } catch (e) { return { success: false, error: e.message }; }
+    } catch (e) {
+      setPartnerProfile(null);
+      await loadUserProfile(userProfile.id);
+      return { success: false, error: e.message };
+    }
   };
 
   const rejectPartnerRequest = async (requestId) => {
@@ -307,7 +316,12 @@ export function AppProvider({ children }) {
           peso: pesoNum,
           fecha: fechaISO,
         });
-        // Feed social
+        // Feed social — reemplazar entrada anterior del mismo movimiento
+        await supabase.from('feed_actividad')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('tipo', 'rm_nuevo')
+          .filter('data->>movimiento', 'eq', key);
         await supabase.from('feed_actividad').insert({
           user_id: user.id,
           tipo: 'rm_nuevo',
@@ -334,7 +348,12 @@ export function AppProvider({ children }) {
           rx: data.rx !== false,
           adaptacion: data.adaptacion || null,
         });
-        // Publicar en feed social
+        // Publicar en feed social — eliminar entrada anterior del mismo día antes de insertar
+        await supabase.from('feed_actividad')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('tipo', 'wod_completado')
+          .filter('data->>dia', 'eq', key);
         await supabase.from('feed_actividad').insert({
           user_id: user.id,
           tipo: 'wod_completado',

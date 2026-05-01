@@ -22,7 +22,7 @@ function Avatar({ nombre, color, size = 40, t }) {
   );
 }
 
-function FeedItem({ item, t, TIPO_ICONS, TIPO_LABELS, getAmigoData, myUserId, onReaction, onComment, onDeleteComment }) {
+function FeedItem({ item, t, TIPO_ICONS, TIPO_LABELS, getAmigoData, myUserId, onReaction, onComment, onDeleteComment, onDeleteFeedItem }) {
   const amigoData = getAmigoData(item);
   const isMe = item.user_id === myUserId;
   const accentColor = isMe ? t.accent : '#4895ef';
@@ -33,8 +33,17 @@ function FeedItem({ item, t, TIPO_ICONS, TIPO_LABELS, getAmigoData, myUserId, on
       case 'wod_completado':
         return (
           <View>
-            {d.dia && <Text style={{ fontSize: t.fs(10), color: t.text3, marginBottom: 4 }}>📅 {d.dia}</Text>}
-            {d.resultado && <Text style={{ fontSize: t.fs(22), fontWeight: '900', color: t.accent }}>{d.resultado}</Text>}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              {d.dia && <Text style={{ fontSize: t.fs(10), color: t.text3 }}>📅 {d.dia}</Text>}
+              {d.rx !== undefined && (
+                <View style={{ backgroundColor: d.rx ? '#52b78820' : '#f4a26120', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, borderColor: d.rx ? '#52b78860' : '#f4a26160' }}>
+                  <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: d.rx ? '#52b788' : '#f4a261' }}>
+                    {d.rx ? 'RX' : 'SCALED'}
+                  </Text>
+                </View>
+              )}
+            </View>
+            {d.resultado && <Text style={{ fontSize: t.fs(22), fontWeight: '900', color: accentColor }}>{d.resultado}</Text>}
             {d.notas && <Text style={{ fontSize: t.fs(12), color: t.text2, marginTop: 4, lineHeight: t.fs(18) }}>{d.notas}</Text>}
           </View>
         );
@@ -78,7 +87,17 @@ function FeedItem({ item, t, TIPO_ICONS, TIPO_LABELS, getAmigoData, myUserId, on
             {TIPO_ICONS[item.tipo]} {TIPO_LABELS[item.tipo]}
           </Text>
         </View>
-        <Text style={{ fontSize: t.fs(10), color: t.text3 }}>{timeAgo(item.created_at)}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={{ fontSize: t.fs(10), color: t.text3 }}>{timeAgo(item.created_at)}</Text>
+          {isMe && (
+            <TouchableOpacity onPress={() => Alert.alert('Eliminar publicación', '¿Seguro que quieres eliminar esta publicación?', [
+              { text: 'Cancelar', style: 'cancel' },
+              { text: 'Eliminar', style: 'destructive', onPress: () => onDeleteFeedItem(item.id) },
+            ])}>
+              <Text style={{ fontSize: t.fs(14), color: t.text3 }}>🗑️</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <View style={{ backgroundColor: t.bg4, borderRadius: 8, padding: 12, marginBottom: 10 }}>
@@ -163,7 +182,8 @@ function FriendsTab({ t }) {
         .from('usuarios_publicos')
         .select('*')
         .eq('box_id', myProfile.box_id)
-        .neq('id', user.id);
+        .neq('id', user.id)
+        .limit(100);
       setSearchResults(data || []);
     } catch (e) {}
     finally { setSearching(false); }
@@ -344,7 +364,7 @@ export default function SocialScreen() {
     );
   }
 
-  const { feed, loadingFeed, refreshFeed, getAmigoData, myUserId, TIPO_ICONS, TIPO_LABELS, solicitudesPendientes } = social;
+  const { feed, loadingFeed, refreshFeed, getAmigoData, myUserId, TIPO_ICONS, TIPO_LABELS, solicitudesPendientes, deleteFeedItem } = social;
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -480,6 +500,7 @@ export default function SocialScreen() {
                   onReaction={handleReaction}
                   onComment={setCommentTarget}
                   onDeleteComment={handleDeleteComment}
+                  onDeleteFeedItem={deleteFeedItem}
                 />
               ))
             )}
