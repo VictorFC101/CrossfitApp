@@ -14,6 +14,9 @@ const parseEmom = (str) => {
   return m ? { interval: m[1], rounds: m[2] } : null;
 };
 
+// Persists across tab switches (component unmount/remount)
+let syncedForDay = null;
+
 export default function TimerScreen() {
   const t = useTheme();
   const { activeProgram } = useProgram();
@@ -40,14 +43,10 @@ export default function TimerScreen() {
   const [synced, setSynced] = useState(false);
   const intervalRef = useRef(null);
 
-  // Module-level: auto-sync once per unique WOD day, survives tab switches
-  const autoSynced = useRef(false);
-
   // Auto-sincronizar timer con el WOD del día (solo una vez por día)
   useEffect(() => {
     if (!todayDay?.wod?.type) return;
-    // Use module-level key so re-mounting (tab switch) doesn't re-sync
-    if (autoSynced.current === todayDay.day) return;
+    if (syncedForDay === todayDay.day) return;
     const { type, duration } = todayDay.wod;
     const typeUpper = (type || '').toUpperCase();
 
@@ -57,7 +56,7 @@ export default function TimerScreen() {
       if (mins) { setCustomMins(String(mins)); setSeconds(mins * 60); }
       setRounds(0);
       setRunning(false);
-      autoSynced.current = todayDay.day;
+      syncedForDay = todayDay.day;
       setSynced(true);
     } else if (typeUpper.includes('EMOM')) {
       const emom = parseEmom(duration);
@@ -72,7 +71,7 @@ export default function TimerScreen() {
       }
       setCurrentEmomRound(1);
       setRunning(false);
-      autoSynced.current = todayDay.day;
+      syncedForDay = todayDay.day;
       setSynced(true);
     } else if (typeUpper.includes('FOR TIME') || typeUpper.includes('TIMECAP') || typeUpper.includes('TIME CAP')) {
       const mins = parseMins(duration);
@@ -80,7 +79,7 @@ export default function TimerScreen() {
       if (mins) { setCustomMins(String(mins)); setSeconds(mins * 60); }
       setRounds(0);
       setRunning(false);
-      autoSynced.current = todayDay.day;
+      syncedForDay = todayDay.day;
       setSynced(true);
     }
   }, [todayDay]);
