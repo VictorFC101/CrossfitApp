@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, FlatList } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../AppContext';
 import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
@@ -44,10 +44,9 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
   // Multi-block state
   const [partResults, setPartResults] = useState({});
 
-  // Re-initialize when modal opens for a different day
-  const [lastDay, setLastDay] = useState(null);
-  if (visible && day?.day !== lastDay) {
-    setLastDay(day?.day || null);
+  // Inicializar campos cada vez que el modal se abre con un día nuevo
+  useEffect(() => {
+    if (!visible || !day) return;
     if (isMulti) {
       const init = {};
       dayParts.forEach(p => {
@@ -71,7 +70,7 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
       if (tp) { const [min, sec] = tp.split(':'); setMinutos(min || ''); setSegundos(sec || ''); }
       else { setMinutos(''); setSegundos(''); }
     }
-  }
+  }, [visible, day?.day]);
 
   const updatePart = (key, fields) =>
     setPartResults(prev => ({ ...prev, [key]: { ...(prev[key] || {}), ...fields } }));
