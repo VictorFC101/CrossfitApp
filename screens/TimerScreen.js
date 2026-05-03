@@ -135,12 +135,16 @@ export default function TimerScreen() {
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60, alignItems: 'center' }}>
         <View style={{ flexDirection: 'row', gap: 6, marginBottom: 20, width: '100%' }}>
-          {['AMRAP', 'FOR TIME', 'EMOM'].map(m => (
-            <TouchableOpacity key={m} onPress={() => changeMode(m)}
-              style={{ flex: 1, padding: 10, backgroundColor: mode === m ? accentColor + '20' : t.bg4, borderWidth: 2, borderColor: mode === m ? accentColor : t.border, borderRadius: 8, alignItems: 'center' }}>
-              <Text style={{ fontSize: t.fs(10), fontWeight: '700', color: mode === m ? accentColor : t.text3, letterSpacing: 1 }}>{m}</Text>
-            </TouchableOpacity>
-          ))}
+          {['AMRAP', 'FOR TIME', 'EMOM'].map(m => {
+            const isActive = mode === m;
+            const isDisabled = running && !isActive;
+            return (
+              <TouchableOpacity key={m} onPress={() => !running && changeMode(m)} disabled={isDisabled}
+                style={{ flex: 1, padding: 10, backgroundColor: isActive ? accentColor + '20' : t.bg4, borderWidth: 2, borderColor: isActive ? accentColor : t.border, borderRadius: 8, alignItems: 'center', opacity: isDisabled ? 0.35 : 1 }}>
+                <Text style={{ fontSize: t.fs(10), fontWeight: '700', color: isActive ? accentColor : t.text3, letterSpacing: 1 }}>{m}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {mode !== 'EMOM' && (
