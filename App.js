@@ -80,7 +80,11 @@ function AppInner() {
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       <StatusBar style={t.dark ? 'light' : 'dark'} />
       <View style={{ flex: 1 }}>
-        {Screen ? <Screen navigate={setActive} session={session} /> : null}
+        {Object.entries(SCREENS).map(([key, ScreenComp]) => (
+          <View key={key} style={{ flex: 1, display: active === key ? 'flex' : 'none' }}>
+            <ScreenComp navigate={setActive} session={session} />
+          </View>
+        ))}
       </View>
       <View style={{ backgroundColor: t.dark ? '#07070e' : '#ffffff', borderTopWidth: 1, borderTopColor: t.border }}>
         <ScrollView
