@@ -678,9 +678,9 @@ export default function HistorialScreen() {
               const companeros = companerosPorDia[day.day] || [];
 
               return (
-                <TouchableOpacity key={i} onPress={() => setExpanded(isOpen ? null : day.day)}
-                  style={{ backgroundColor: t.card, borderWidth: 1, borderColor: isOpen ? accent + '50' : t.border, borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 }}>
+                <View key={i} style={{ backgroundColor: t.card, borderWidth: 1, borderColor: isOpen ? accent + '50' : t.border, borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
+                  <TouchableOpacity onPress={() => setExpanded(isOpen ? null : day.day)}
+                    style={{ flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 }}>
                     <View style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: accent + '20', borderWidth: 1, borderColor: accent + '40', alignItems: 'center', justifyContent: 'center' }}>
                       <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: accent, letterSpacing: 0.5, textAlign: 'center' }}>
                         {day.day.split(' ')[0].substring(0, 3).toUpperCase()}{'\n'}{day.day.split(' ')[1]}
@@ -694,7 +694,7 @@ export default function HistorialScreen() {
                       <Text style={{ fontSize: t.fs(16), fontWeight: '900', color: accent }}>{res.resultado || '—'}</Text>
                       <Text style={{ fontSize: t.fs(9), color: t.text3, marginTop: 2 }}>{isOpen ? '▴' : '▾'}</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
 
                   {isOpen && (
                     <View style={{ borderTopWidth: 1, borderTopColor: t.border, padding: 14 }}>
@@ -754,7 +754,7 @@ export default function HistorialScreen() {
                         </View>
                       )}
 
-                      {day.wod.movements && day.wod.movements.length > 0 && (
+                      {day.wod?.movements?.length > 0 && (
                         <View style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 12, marginBottom: 12 }}>
                           <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>⚡ MOVIMIENTOS</Text>
                           {day.wod.movements.map((m, j) => (
@@ -809,7 +809,7 @@ export default function HistorialScreen() {
                       )}
                     </View>
                   )}
-                </TouchableOpacity>
+                </View>
               );
             })}
 
