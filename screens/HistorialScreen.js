@@ -593,6 +593,7 @@ export default function HistorialScreen() {
         <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 4 }}>
           {diasConResultado.length + wodsLibres.length} WODs completados · {diasSinResultado.length} pendientes
         </Text>
+        <Text style={{ fontSize: t.fs(9), color: t.accent + '60', marginTop: 4, letterSpacing: 1 }}>build 2026-05-03T01</Text>
       </View>
 
       {/* TABS */}
