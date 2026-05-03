@@ -158,7 +158,12 @@ export default function ProfileScreen() {
     ? plan.weeks.flatMap(w => w.days.filter(d => d.type !== 'Libre').map(d => d.day))
     : [];
   const totalDias = nonLibreDays.length;
-  const completados = nonLibreDays.filter(day => resultados[day]).length;
+  const completados = nonLibreDays.filter(day => {
+    const res = resultados[day];
+    if (!res) return false;
+    if (res.partes?.length > 0) return res.partes.every(p => !!p.resultado);
+    return !!res.resultado;
+  }).length;
   const totalRMs = Object.keys(rms).filter(k => parseFloat(rms[k]) > 0).length;
   const initials = nombre ? nombre.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase() : 'TU';
   

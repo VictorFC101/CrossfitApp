@@ -477,6 +477,28 @@ export default function HistorialScreen() {
                         )}
                       </View>
 
+                      {res.partes?.length > 0 && (
+                        <View style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                          <Text style={{ fontSize: t.fs(10), color: accent, letterSpacing: 2, fontWeight: '700', marginBottom: 10 }}>📋 DESGLOSE POR BLOQUE</Text>
+                          {res.partes.map((parte, pi) => (
+                            <View key={pi} style={{ marginBottom: pi < res.partes.length - 1 ? 10 : 0, paddingBottom: pi < res.partes.length - 1 ? 10 : 0, borderBottomWidth: pi < res.partes.length - 1 ? 1 : 0, borderBottomColor: t.border }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                <View style={{ backgroundColor: accent + '20', borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2 }}>
+                                  <Text style={{ fontSize: t.fs(8), fontWeight: '700', color: accent }}>{parte.label || `Bloque ${pi + 1}`}</Text>
+                                </View>
+                                {parte.rx !== false && (
+                                  <View style={{ backgroundColor: accent + '15', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                                    <Text style={{ fontSize: t.fs(7), fontWeight: '700', color: accent }}>Rx</Text>
+                                  </View>
+                                )}
+                              </View>
+                              <Text style={{ fontSize: t.fs(18), fontWeight: '900', color: accent }}>{parte.resultado || '—'}</Text>
+                              {!!parte.notas && <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 3, fontStyle: 'italic' }}>"{parte.notas}"</Text>}
+                            </View>
+                          ))}
+                        </View>
+                      )}
+
                       {res.notas ? (
                         <View style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 12, marginBottom: 12 }}>
                           <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>📝 NOTAS</Text>
