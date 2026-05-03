@@ -703,8 +703,8 @@ export default function HistorialScreen() {
                           <Text style={{ fontSize: t.fs(10), color: accent, letterSpacing: 2, fontWeight: '700' }}>📊 RESULTADO</Text>
                           <TouchableOpacity
                             onPress={() => { setExpanded(null); setEditingDay(day); }}
-                            style={{ backgroundColor: accent + '20', borderWidth: 1, borderColor: accent + '50', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 }}>
-                            <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: accent }}>✏️ EDITAR</Text>
+                            style={{ backgroundColor: accent, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 }}>
+                            <Text style={{ fontSize: t.fs(9), fontWeight: '900', color: '#fff' }}>✏️ EDITAR</Text>
                           </TouchableOpacity>
                         </View>
                         <Text style={{ fontSize: t.fs(24), fontWeight: '900', color: accent }}>{res.resultado || 'No registrado'}</Text>
@@ -819,7 +819,8 @@ export default function HistorialScreen() {
                 {diasSinResultado.map((day, i) => {
                   const accent = typeColors[day.type] || t.accent;
                   return (
-                    <View key={i} style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 10, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 12, opacity: 0.5 }}>
+                    <TouchableOpacity key={i} onPress={() => setEditingDay(day)}
+                      style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 10, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                       <View style={{ width: 36, height: 36, borderRadius: 6, backgroundColor: accent + '15', alignItems: 'center', justifyContent: 'center' }}>
                         <Text style={{ fontSize: t.fs(8), fontWeight: '700', color: accent, textAlign: 'center' }}>
                           {day.day.split(' ')[0].substring(0, 3).toUpperCase()}{'\n'}{day.day.split(' ')[1]}
@@ -829,8 +830,10 @@ export default function HistorialScreen() {
                         <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{day.label}</Text>
                         <Text style={{ fontSize: t.fs(10), color: t.text3 }}>S{day.weekNumber} · Sin resultado</Text>
                       </View>
-                      <Text style={{ fontSize: t.fs(18), color: t.text3 }}>○</Text>
-                    </View>
+                      <View style={{ backgroundColor: accent + '15', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}>
+                        <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: accent }}>+ ANOTAR</Text>
+                      </View>
+                    </TouchableOpacity>
                   );
                 })}
               </>
