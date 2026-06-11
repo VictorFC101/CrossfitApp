@@ -14,7 +14,7 @@ function getDayParts(day) {
   if (!day) return [];
   const parts = [];
   if (day.strength?.sets?.length) {
-    parts.push({ key: 'strength', label: 'FUERZA', isStrength: true });
+    parts.push({ key: 'strength', label: 'FUERZA', isStrength: true, sets: day.strength.sets });
   }
   if (day.wod && day.type !== 'Libre') {
     if (day.wod.parts?.length >= 1) {
@@ -41,21 +41,30 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
   const [repsExtra, setRepsExtra] = useState('');
   const [notas, setNotas] = useState('');
 
-  // Multi-block state
+  // Multi-block state: strength → { pesos: string[], notas, rx }
+  //                    wod     → { minutos, segundos, rondas, repsExtra, notas, rx }
   const [partResults, setPartResults] = useState({});
 
-  // Inicializar campos cada vez que el modal se abre con un día nuevo
   useEffect(() => {
     if (!visible || !day) return;
     if (isMulti) {
       const init = {};
       dayParts.forEach(p => {
         const saved = (savedResult?.partes || []).find(s => s.key === p.key);
-        init[p.key] = {
-          resultado: saved?.resultado || '',
-          notas: saved?.notas || '',
-          rx: saved?.rx !== false,
-        };
+        if (p.isStrength) {
+          const raw = saved?.resultado ? saved.resultado.split(' / ').map(s => s.trim()) : [];
+          const pesos = Array(p.sets?.length || 1).fill('').map((_, i) => raw[i] || '');
+          init[p.key] = { pesos, notas: saved?.notas || '', rx: saved?.rx !== false };
+        } else {
+          const r = saved?.resultado || '';
+          const segs = r.split(' · ');
+          const rp = segs.find(s => /^\d+\+\d+$/.test(s.trim())) || '';
+          const tp = segs.find(s => /^\d{1,2}:\d{2}$/.test(s.trim())) || '';
+          const pr = { minutos: '', segundos: '', rondas: '', repsExtra: '', notas: saved?.notas || '', rx: saved?.rx !== false };
+          if (rp) { const [ron, rep] = rp.split('+'); pr.rondas = ron || ''; pr.repsExtra = rep || ''; }
+          if (tp) { const [min, sec] = tp.split(':'); pr.minutos = min || ''; pr.segundos = sec || ''; }
+          init[p.key] = pr;
+        }
       });
       setPartResults(init);
     } else {
@@ -75,11 +84,26 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
   const updatePart = (key, fields) =>
     setPartResults(prev => ({ ...prev, [key]: { ...(prev[key] || {}), ...fields } }));
 
+  const updatePeso = (key, idx, val) =>
+    setPartResults(prev => {
+      const pesos = [...(prev[key]?.pesos || [])];
+      pesos[idx] = val;
+      return { ...prev, [key]: { ...(prev[key] || {}), pesos } };
+    });
+
   const handleSave = () => {
     if (isMulti) {
       const partes = dayParts.map(p => {
         const pr = partResults[p.key] || {};
-        return { key: p.key, label: p.label, resultado: pr.resultado || '', notas: pr.notas || '', rx: pr.rx !== false };
+        let resultado;
+        if (p.isStrength) {
+          resultado = (pr.pesos || []).filter(Boolean).join(' / ');
+        } else {
+          const tp = pr.minutos ? `${pr.minutos.padStart(2,'0')}:${(pr.segundos||'00').padStart(2,'0')}` : '';
+          const rp = pr.rondas ? `${pr.rondas}+${pr.repsExtra||'0'}` : '';
+          resultado = [rp, tp].filter(Boolean).join(' · ');
+        }
+        return { key: p.key, label: p.label, resultado, notas: pr.notas || '', rx: pr.rx !== false };
       });
       const summary = partes.map(p => `${p.label}: ${p.resultado || '—'}`).join(' · ');
       onSave({ resultado: summary, notas: '', fecha: new Date().toISOString(), rx: partes.every(p => p.rx), adaptacion: savedResult?.adaptacion || null, partes });
@@ -99,11 +123,12 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
   const ph = t.dark ? '#2a4a2e' : '#81c784';
   const inp = { backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, color: icolor, fontWeight: '700', padding: 12, textAlign: 'center', fontSize: t.fs(28) };
   const lbl = { fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6, textAlign: 'center' };
+  const sep = { alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 };
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <View style={{ flex: 1, backgroundColor: t.bg }}>
-        <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: '#4caf50', padding: 16, paddingTop: 56 }}>
+        <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: '#4caf50', padding: 16, paddingTop: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View>
               <Text style={{ fontSize: t.fs(10), color: '#4caf5088', letterSpacing: 3, fontWeight: '700' }}>EDITAR RESULTADO</Text>
@@ -124,6 +149,7 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
               const isRx = pr.rx !== false;
               return (
                 <View key={part.key} style={{ backgroundColor: gbg, borderWidth: 1, borderColor: gborder, borderRadius: 10, padding: 14, marginBottom: 12 }}>
+                  {/* Cabecera del bloque */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <Text style={{ fontSize: t.fs(11), fontWeight: '700', color: '#4caf50', letterSpacing: 1 }}>
                       {part.isStrength ? '💪 ' : '⚡ '}{part.label}
@@ -137,6 +163,7 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
                     )}
                   </View>
 
+                  {/* Rx / Scaled */}
                   <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                     <TouchableOpacity onPress={() => updatePart(part.key, { rx: true })}
                       style={{ flex: 1, backgroundColor: isRx ? '#52b78820' : ibg, borderWidth: 1.5, borderColor: isRx ? '#52b788' : iborder, borderRadius: 8, padding: 8, alignItems: 'center' }}>
@@ -148,21 +175,76 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={[lbl, { textAlign: 'left', marginBottom: 6 }]}>RESULTADO</Text>
+                  {part.isStrength ? (
+                    /* FUERZA: un input de peso por serie */
+                    <>
+                      {(part.sets || []).map((set, si) => {
+                        const p_pct = set.desc?.match(/(\d+)%/)?.[1];
+                        return (
+                          <View key={si} style={{ backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, padding: 10, marginBottom: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                              <View style={{ width: 20, height: 20, borderRadius: 4, backgroundColor: '#4caf5020', alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: t.fs(9), color: '#4caf50', fontWeight: '700' }}>{si + 1}</Text>
+                              </View>
+                              <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: icolor, flex: 1 }}>{set.desc}</Text>
+                              {p_pct && (
+                                <View style={{ height: 3, width: 40, backgroundColor: iborder, borderRadius: 2, overflow: 'hidden' }}>
+                                  <View style={{ height: 3, width: `${p_pct}%`, backgroundColor: '#4caf50', borderRadius: 2 }} />
+                                </View>
+                              )}
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <TextInput
+                                value={(pr.pesos || [])[si] || ''}
+                                onChangeText={v => updatePeso(part.key, si, v)}
+                                keyboardType="decimal-pad"
+                                placeholder="0"
+                                placeholderTextColor={ph}
+                                style={{ ...inp, flex: 1, fontSize: t.fs(22) }}
+                              />
+                              <Text style={{ fontSize: t.fs(13), color: icolor, fontWeight: '700' }}>kg</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </>
+                  ) : (
+                    /* WOD: MIN:SEG + RONDAS+REPS */
+                    <>
+                      <Text style={[lbl, { marginBottom: 8 }]}>TIEMPO REALIZADO</Text>
+                      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={lbl}>MIN</Text>
+                          <TextInput value={pr.minutos || ''} onChangeText={v => updatePart(part.key, { minutos: v })} keyboardType="numeric" placeholder="00" placeholderTextColor={ph} style={inp} />
+                        </View>
+                        <View style={sep}><Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>:</Text></View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={lbl}>SEG</Text>
+                          <TextInput value={pr.segundos || ''} onChangeText={v => updatePart(part.key, { segundos: v })} keyboardType="numeric" placeholder="00" placeholderTextColor={ph} style={inp} />
+                        </View>
+                      </View>
+                      <Text style={[lbl, { marginBottom: 8 }]}>RONDAS + REPS</Text>
+                      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={lbl}>RONDAS</Text>
+                          <TextInput value={pr.rondas || ''} onChangeText={v => updatePart(part.key, { rondas: v })} keyboardType="numeric" placeholder="0" placeholderTextColor={ph} style={inp} />
+                        </View>
+                        <View style={sep}><Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>+</Text></View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={lbl}>REPS EXTRA</Text>
+                          <TextInput value={pr.repsExtra || ''} onChangeText={v => updatePart(part.key, { repsExtra: v })} keyboardType="numeric" placeholder="0" placeholderTextColor={ph} style={inp} />
+                        </View>
+                      </View>
+                    </>
+                  )}
+
                   <TextInput
-                    value={pr.resultado}
-                    onChangeText={v => updatePart(part.key, { resultado: v })}
-                    placeholder={part.isStrength ? 'Ej: 5×5 a 80kg' : 'Ej: 12:45 o 8+3'}
-                    placeholderTextColor={ph}
-                    style={{ ...inp, fontSize: t.fs(18), textAlign: 'left', marginBottom: 10 }}
-                  />
-                  <TextInput
-                    value={pr.notas}
+                    value={pr.notas || ''}
                     onChangeText={v => updatePart(part.key, { notas: v })}
                     placeholder="Notas..."
                     placeholderTextColor={ph}
                     multiline
-                    style={{ backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, color: icolor, fontSize: t.fs(13), padding: 10, textAlignVertical: 'top' }}
+                    style={{ backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, color: icolor, fontSize: t.fs(13), padding: 10, textAlignVertical: 'top', marginTop: 4 }}
                   />
                 </View>
               );
@@ -186,9 +268,7 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
                   <Text style={lbl}>MIN</Text>
                   <TextInput value={minutos} onChangeText={setMinutos} keyboardType="numeric" placeholder="00" placeholderTextColor={ph} style={inp} />
                 </View>
-                <View style={{ alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 }}>
-                  <Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>:</Text>
-                </View>
+                <View style={sep}><Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>:</Text></View>
                 <View style={{ flex: 1 }}>
                   <Text style={lbl}>SEG</Text>
                   <TextInput value={segundos} onChangeText={setSegundos} keyboardType="numeric" placeholder="00" placeholderTextColor={ph} style={inp} />
@@ -201,9 +281,7 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
                   <Text style={lbl}>RONDAS</Text>
                   <TextInput value={rondas} onChangeText={setRondas} keyboardType="numeric" placeholder="0" placeholderTextColor={ph} style={inp} />
                 </View>
-                <View style={{ alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 }}>
-                  <Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>+</Text>
-                </View>
+                <View style={sep}><Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>+</Text></View>
                 <View style={{ flex: 1 }}>
                   <Text style={lbl}>REPS EXTRA</Text>
                   <TextInput value={repsExtra} onChangeText={setRepsExtra} keyboardType="numeric" placeholder="0" placeholderTextColor={ph} style={inp} />
@@ -246,7 +324,7 @@ function MovementPicker({ visible, onClose, onSelect }) {
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <View style={{ flex: 1, backgroundColor: t.bg }}>
-        <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16, paddingTop: 56 }}>
+        <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16, paddingTop: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <Text style={{ fontSize: t.fs(20), fontWeight: '900', color: t.text, letterSpacing: 1 }}>AÑADIR MOVIMIENTO</Text>
             <TouchableOpacity onPress={onClose}
@@ -354,7 +432,7 @@ function WodCreator({ visible, onClose, onSave }) {
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <MovementPicker visible={showPicker} onClose={() => setShowPicker(false)} onSelect={addMovement} />
       <View style={{ flex: 1, backgroundColor: t.bg }}>
-        <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16, paddingTop: 56 }}>
+        <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16, paddingTop: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={{ fontSize: t.fs(22), fontWeight: '900', color: t.text, letterSpacing: 1 }}>NUEVO WOD</Text>
             <TouchableOpacity onPress={() => { reset(); onClose(); }}
@@ -581,7 +659,7 @@ export default function HistorialScreen() {
       />
 
       {/* HEADER */}
-      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 20, paddingTop: 60 }}>
+      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 20 }}>
         <Text style={{ fontSize: t.fs(10), color: t.accent + '88', letterSpacing: 4, fontWeight: '700' }}>REGISTRO DEL BLOQUE</Text>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
           <Text style={{ fontSize: t.fs(32), fontWeight: '900', letterSpacing: 2, color: t.text }}>HISTORIAL</Text>
@@ -593,7 +671,6 @@ export default function HistorialScreen() {
         <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 4 }}>
           {diasConResultado.length + wodsLibres.length} WODs completados · {diasSinResultado.length} pendientes
         </Text>
-        <Text style={{ fontSize: t.fs(9), color: t.accent + '60', marginTop: 4, letterSpacing: 1 }}>build 2026-05-03T01</Text>
       </View>
 
       {/* TABS */}
@@ -755,16 +832,60 @@ export default function HistorialScreen() {
                         </View>
                       )}
 
-                      {day.wod?.movements?.length > 0 && (
+                      {day.strength && (
                         <View style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 12, marginBottom: 12 }}>
-                          <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>⚡ MOVIMIENTOS</Text>
-                          {day.wod.movements.map((m, j) => (
-                            <View key={j} style={{ flexDirection: 'row', gap: 8, marginBottom: 5 }}>
-                              <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: accent, minWidth: 30 }}>{m.reps}</Text>
-                              <Text style={{ fontSize: t.fs(12), color: t.text }}>{m.name}</Text>
-                              {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text3 }}>· {m.weight}</Text>}
+                          <Text style={{ fontSize: t.fs(10), color: accent, letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>💪 FUERZA</Text>
+                          <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text, marginBottom: 8 }}>{day.strength.name}</Text>
+                          {day.strength.sets?.map((s, j) => (
+                            <View key={j} style={{ flexDirection: 'row', gap: 8, marginBottom: 5, alignItems: 'center' }}>
+                              <View style={{ width: 20, height: 20, borderRadius: 4, backgroundColor: accent + '20', alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: accent }}>{j + 1}</Text>
+                              </View>
+                              <Text style={{ fontSize: t.fs(12), color: t.text, flex: 1 }}>{s.desc}</Text>
+                              {s.note ? <Text style={{ fontSize: t.fs(11), color: t.text3 }}>{s.note}</Text> : null}
                             </View>
                           ))}
+                        </View>
+                      )}
+
+                      {day.wod && (day.wod.movements?.length > 0 || day.wod.parts?.length > 0 || day.wod.emomMinutes) && (
+                        <View style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                          <Text style={{ fontSize: t.fs(10), color: accent, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>
+                            ⚡ WOD{!day.wod.parts && day.wod.type ? ` · ${day.wod.type}${day.wod.duration ? ` ${day.wod.duration}` : ''}` : ''}
+                          </Text>
+                          {day.wod.parts?.length > 0
+                            ? day.wod.parts.map((part, pi) => (
+                                <View key={pi} style={{ marginBottom: pi < day.wod.parts.length - 1 ? 10 : 0 }}>
+                                  <View style={{ backgroundColor: accent + '20', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', marginBottom: 6 }}>
+                                    <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: accent }}>
+                                      {part.label || `WOD ${pi + 1}`}{part.type ? ` · ${part.type}` : ''}{part.duration ? ` · ${part.duration}` : ''}
+                                    </Text>
+                                  </View>
+                                  {part.movements?.filter(m => m.name !== '—').map((m, j) => (
+                                    <View key={j} style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
+                                      <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: accent, minWidth: 30 }}>{m.reps}</Text>
+                                      <Text style={{ fontSize: t.fs(12), color: t.text, flex: 1 }}>{m.name}</Text>
+                                      {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text3 }}>· {m.weight}</Text>}
+                                    </View>
+                                  ))}
+                                  {pi < day.wod.parts.length - 1 && <View style={{ height: 1, backgroundColor: t.border, marginTop: 8 }} />}
+                                </View>
+                              ))
+                            : day.wod.emomMinutes
+                            ? day.wod.emomMinutes.map((min, j) => (
+                                <View key={j} style={{ flexDirection: 'row', gap: 8, marginBottom: 5 }}>
+                                  <Text style={{ fontSize: t.fs(10), fontWeight: '700', color: accent, minWidth: 52 }}>{min.min}</Text>
+                                  <Text style={{ fontSize: t.fs(12), color: t.text }}>{min.work}</Text>
+                                </View>
+                              ))
+                            : day.wod.movements?.filter(m => m.name !== '—').map((m, j) => (
+                                <View key={j} style={{ flexDirection: 'row', gap: 8, marginBottom: 5 }}>
+                                  <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: accent, minWidth: 30 }}>{m.reps}</Text>
+                                  <Text style={{ fontSize: t.fs(12), color: t.text, flex: 1 }}>{m.name}</Text>
+                                  {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text3 }}>· {m.weight}</Text>}
+                                </View>
+                              ))
+                          }
                         </View>
                       )}
 
