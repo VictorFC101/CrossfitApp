@@ -152,14 +152,21 @@ function ShareCard({ day, resultado, notas, rx, acento }) {
   );
 }
 
-// ── Tira de progresión — últimos 4 resultados ─────────────────
+// ── Tira de progresión — últimos 4 resultados del mismo movimiento ─────────────────
 const MONTHS_S = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 function fmtDateShort(iso) {
   try { const d = new Date(iso); return `${d.getDate()} ${MONTHS_S[d.getMonth()]}`; } catch { return ''; }
 }
-function ProgressStrip({ resultados, currentDayKey, t }) {
+function ProgressStrip({ resultados, currentDayKey, day, allDaysFlat, t }) {
+  // Solo mostrar progresión si el día tiene rmKey (movimiento de fuerza)
+  if (!day?.rmKey) return null;
+
+  // Mapa dayKey → rmKey de todos los días del programa
+  const dayRmKeyMap = {};
+  (allDaysFlat || []).forEach(d => { dayRmKeyMap[d.day] = d.rmKey || null; });
+
   const entries = Object.entries(resultados)
-    .filter(([k, v]) => k !== currentDayKey && v?.resultado)
+    .filter(([k, v]) => k !== currentDayKey && v?.resultado && dayRmKeyMap[k] === day.rmKey)
     .map(([k, v]) => {
       const segs = (v.resultado || '').split(' · ');
       const roundsPart = segs.find(s => /^\d+\+\d+$/.test(s.trim())) || '';
@@ -201,7 +208,7 @@ function ProgressStrip({ resultados, currentDayKey, t }) {
 
   return (
     <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.accent + '30', borderRadius: 10, padding: 14, marginBottom: 10 }}>
-      <Text style={{ fontSize: t.fs(10), fontWeight: '700', letterSpacing: 2, color: t.accent, marginBottom: 14 }}>📈 TU PROGRESIÓN</Text>
+      <Text style={{ fontSize: t.fs(10), fontWeight: '700', letterSpacing: 2, color: t.accent, marginBottom: 14 }}>📈 PROGRESIÓN — {day?.label || ''}</Text>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {entries.map((e, i) => (
           <View key={e.key} style={{ flex: 1, alignItems: 'center' }}>
@@ -558,7 +565,9 @@ export default function WodScreen({ navigate }) {
   };
 
   const today   = getToday();
-  const rmKey   = day?.rmKey || 'cj';
+  const LABEL_TO_RMKEY = { 'back squat': 'bs', 'front squat': 'fs', 'deadlift': 'dl', 'strict press': 'sp', 'push press': 'sp', 'snatch': 'sn', 'clean': 'cj' };
+  const inferredRmKey = day?.label ? (Object.entries(LABEL_TO_RMKEY).find(([k]) => day.label.toLowerCase().includes(k))?.[1] || null) : null;
+  const rmKey   = day?.rmKey || inferredRmKey || 'cj';
   const rmVal   = parseFloat(rms[rmKey]);
   const hasRM   = rmVal > 0;
 
@@ -575,7 +584,7 @@ export default function WodScreen({ navigate }) {
   if (!todayInProgram || !day) {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
-        <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16, paddingTop: 60 }}>
+        <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16 }}>
           <Text style={{ fontSize: t.fs(10), color: t.accent + '88', letterSpacing: 4, fontWeight: '700' }}>WOD DEL DÍA</Text>
           <Text style={{ fontSize: t.fs(28), fontWeight: '900', letterSpacing: 2, color: t.text, marginTop: 4 }}>HOY</Text>
           <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 4 }}>{formatDateShort(today)}</Text>
@@ -625,7 +634,7 @@ export default function WodScreen({ navigate }) {
         </ViewShot>
       </View>
 
-      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16, paddingTop: 60 }}>
+      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
           <View style={{ backgroundColor: t.accent, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 }}>
             <Text style={{ fontSize: t.fs(8), color: '#fff', fontWeight: '900', letterSpacing: 2 }}>HOY</Text>
@@ -646,6 +655,21 @@ export default function WodScreen({ navigate }) {
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 60 }}>
+
+        {/* CALENTAMIENTO */}
+        {day.warmup?.length > 0 && (
+          <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.accent + '30', borderRadius: 10, padding: 14, marginBottom: 10 }}>
+            <Text style={{ fontSize: t.fs(12), fontWeight: '700', letterSpacing: 2, color: t.accent, marginBottom: 12 }}>🔥 CALENTAMIENTO</Text>
+            {day.warmup.map((item, i) => (
+              <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent + '60', borderRadius: 8, padding: 10, marginBottom: 6 }}>
+                <View style={{ width: 22, height: 22, borderRadius: 4, backgroundColor: t.accent + '20', borderWidth: 1, borderColor: t.accent + '40', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
+                  <Text style={{ fontSize: t.fs(10), color: t.accent, fontWeight: '700' }}>{i + 1}</Text>
+                </View>
+                <Text style={{ flex: 1, fontSize: t.fs(13), color: t.text, lineHeight: t.fs(19) }}>{item}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* FUERZA */}
         {day.strength && (
@@ -812,7 +836,7 @@ export default function WodScreen({ navigate }) {
         )}
 
         {/* PROGRESIÓN */}
-        <ProgressStrip resultados={resultados} currentDayKey={day.day} t={t} />
+        <ProgressStrip resultados={resultados} currentDayKey={day.day} day={day} allDaysFlat={allDaysFlat} t={t} />
 
         {/* RESULTADO DE LA PAREJA */}
         {partnerProfile && partnerResultados[day.day] && (() => {
@@ -856,12 +880,28 @@ export default function WodScreen({ navigate }) {
                 return p.isStrength ? !!pr.resultado : !!(pr.minutos || pr.rondas);
               }).length;
               return (
-                <TouchableOpacity onPress={guardarPartes}
-                  style={{ backgroundColor: '#2e6e32', borderRadius: 8, padding: 14, alignItems: 'center' }}>
-                  <Text style={{ color: '#fff', fontWeight: '900', fontSize: t.fs(13), letterSpacing: 1 }}>
-                    💾 GUARDAR TODO{filled > 0 ? ` (${filled}/${dayParts.length})` : ''}
-                  </Text>
-                </TouchableOpacity>
+                <>
+                  <TouchableOpacity onPress={guardarPartes}
+                    style={{ backgroundColor: '#2e6e32', borderRadius: 8, padding: 14, alignItems: 'center', marginBottom: savedResult ? 8 : 0 }}>
+                    <Text style={{ color: '#fff', fontWeight: '900', fontSize: t.fs(13), letterSpacing: 1 }}>
+                      💾 GUARDAR TODO{filled > 0 ? ` (${filled}/${dayParts.length})` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                  {savedResult && (
+                    <TouchableOpacity
+                      onPress={compartir}
+                      disabled={sharing}
+                      style={{ backgroundColor: t.dark ? '#0e1a10' : '#fff', borderWidth: 1.5, borderColor: '#2e6e32', borderRadius: 8, padding: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
+                      {sharing
+                        ? <ActivityIndicator size="small" color="#52b788" />
+                        : <Text style={{ fontSize: t.fs(16) }}>📤</Text>
+                      }
+                      <Text style={{ color: '#52b788', fontWeight: '900', fontSize: t.fs(13), letterSpacing: 1 }}>
+                        {sharing ? 'GENERANDO...' : 'COMPARTIR RESULTADO'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </>
               );
             })()}
           </View>
