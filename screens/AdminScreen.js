@@ -10,7 +10,7 @@ import AssignProgramScreen from './AssignProgramScreen';
 import { mayo2026 } from '../assets/mayo2026';
 import { junio2026 } from '../assets/junio2026';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const MESES_LARGOS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
