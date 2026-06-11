@@ -188,7 +188,7 @@ export default function RMScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       {/* HEADER */}
-      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: accentColor, padding: 20, paddingTop: 60 }}>
+      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: accentColor, padding: 20 }}>
         <Text style={{ fontSize: t.fs(10), color: accentColor + '88', letterSpacing: 4, fontWeight: '700' }}>TUS MARCAS PERSONALES</Text>
         <Text style={{ fontSize: t.fs(32), fontWeight: '900', letterSpacing: 2, color: t.text, marginTop: 4 }}>MIS 1RM</Text>
         <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 4 }}>Se sincronizan automáticamente con el WOD</Text>

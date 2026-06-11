@@ -128,7 +128,7 @@ export default function TimerScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
-      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: accentColor, padding: 20, paddingTop: 60 }}>
+      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: accentColor, padding: 20 }}>
         <Text style={{ fontSize: t.fs(10), color: accentColor + '88', letterSpacing: 4, fontWeight: '700' }}>TEMPORIZADOR WOD</Text>
         <Text style={{ fontSize: t.fs(32), fontWeight: '900', letterSpacing: 2, color: t.text, marginTop: 4 }}>TIMER</Text>
       </View>
