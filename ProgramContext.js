@@ -261,6 +261,32 @@ export function ProgramProvider({ children }) {
     }
   };
 
+  const updateProgram = async (id, updatedProgram) => {
+    try {
+      const stored = await AsyncStorage.getItem('all_programs');
+      const existing = stored ? JSON.parse(stored) : [];
+      const updated = existing.map(p => p.id === id ? updatedProgram : p);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { start, end } = getProgramDateRange(updatedProgram);
+        const { error } = await supabase.from('programas').update({
+          data: updatedProgram,
+          start_date: start?.toISOString() || null,
+          end_date: end?.toISOString() || null,
+          updated_at: new Date().toISOString(),
+        }).eq('id', id);
+        if (error) throw error;
+      }
+
+      await AsyncStorage.setItem('all_programs', JSON.stringify(updated));
+      setPrograms(updated.map(enrichProgram));
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
   const replaceDefaultProgram = async (newPlan) => {
     try {
       const stored = await AsyncStorage.getItem('all_programs');

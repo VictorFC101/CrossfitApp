@@ -154,9 +154,16 @@ export default function ProfileScreen() {
     }
   };
 
-  const totalDias = plan ? plan.weeks.reduce((acc, w) =>
-    acc + w.days.filter(d => d.type !== 'Libre').length, 0) : 0;
-  const completados = Object.keys(resultados).length;
+  const nonLibreDays = plan
+    ? plan.weeks.flatMap(w => w.days.filter(d => d.type !== 'Libre').map(d => d.day))
+    : [];
+  const totalDias = nonLibreDays.length;
+  const completados = nonLibreDays.filter(day => {
+    const res = resultados[day];
+    if (!res) return false;
+    if (res.partes?.length > 0) return res.partes.every(p => !!p.resultado);
+    return !!res.resultado;
+  }).length;
   const totalRMs = Object.keys(rms).filter(k => parseFloat(rms[k]) > 0).length;
   const initials = nombre ? nombre.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase() : 'TU';
   
@@ -166,7 +173,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
-      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 20, paddingTop: 60 }}>
+      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 20 }}>
         <Text style={{ fontSize: t.fs(9), color: t.accent + '88', letterSpacing: 4, fontWeight: '700' }}>TU PERFIL</Text>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
           <TouchableOpacity onPress={handleSecretTap}>
@@ -444,9 +451,18 @@ export default function ProfileScreen() {
                   const amigo = a.solicitante?.id === myUserId ? a.receptor : a.solicitante;
                   if (!amigo) return null;
                   return (
-                    <TouchableOpacity key={i} onPress={async () => {
-                        const res = await sendPartnerRequest(amigo.id, amigo.nombre || amigo.email);
-                        if (!res?.success) Alert.alert('Error', res?.error || 'No se pudo enviar la solicitud. Asegúrate de que la función está activada en el servidor.');
+                    <TouchableOpacity key={i} onPress={() => {
+                        Alert.alert(
+                          'Enviar solicitud',
+                          `¿Enviar solicitud de pareja a ${amigo.nombre || amigo.email}?`,
+                          [
+                            { text: 'Cancelar', style: 'cancel' },
+                            { text: 'Enviar', onPress: async () => {
+                              const res = await sendPartnerRequest(amigo.id, amigo.nombre || amigo.email);
+                              if (!res?.success) Alert.alert('Error', res?.error || 'No se pudo enviar la solicitud.');
+                            }},
+                          ]
+                        );
                       }}
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, marginBottom: 8 }}>
                       <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: t.accent + '20', alignItems: 'center', justifyContent: 'center' }}>

@@ -148,11 +148,13 @@ export function AppProvider({ children }) {
       // Cargar resultados desde Supabase (fuente de verdad)
       const { data: resData } = await supabase
         .from('resultados')
-        .select('dia, resultado, notas, fecha, rx, adaptacion')
-        .eq('user_id', uid);
+        .select('dia, resultado, notas, fecha, rx, adaptacion, partes')
+        .eq('user_id', uid)
+        .order('fecha', { ascending: false, nullsFirst: false })
+        .limit(365);
       if (resData?.length) {
         const resMap = {};
-        resData.forEach(r => { resMap[r.dia] = { resultado: r.resultado, notas: r.notas, fecha: r.fecha, rx: r.rx !== false, adaptacion: r.adaptacion || null }; });
+        resData.forEach(r => { resMap[r.dia] = { resultado: r.resultado, notas: r.notas, fecha: r.fecha, rx: r.rx !== false, adaptacion: r.adaptacion || null, partes: r.partes || null }; });
         setResultados(prev => ({ ...prev, ...resMap }));
         await AsyncStorage.setItem('user_resultados', JSON.stringify({ ...resMap }));
       }
@@ -345,6 +347,7 @@ export function AppProvider({ children }) {
           fecha: data.fecha,
           rx: data.rx !== false,
           adaptacion: data.adaptacion || null,
+          partes: data.partes || null,
         });
         // Publicar en feed social — eliminar entrada anterior del mismo día antes de insertar
         await supabase.from('feed_actividad')

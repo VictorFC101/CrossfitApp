@@ -220,7 +220,7 @@ export function SocialProvider({ children }) {
       for (let i = 1; i < data.length; i++) {
         const d = new Date(data[i].created_at);
         d.setHours(0, 0, 0, 0);
-        const diff = (lastDate - d) / (1000 * 60 * 60 * 24);
+        const diff = Math.round((lastDate - d) / (1000 * 60 * 60 * 24));
         if (diff === 1) { racha++; lastDate = d; }
         else break;
       }

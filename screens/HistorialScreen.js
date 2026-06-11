@@ -1,13 +1,312 @@
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, FlatList } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../AppContext';
 import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { useSocial } from '../SocialContext';
 import { MOVEMENTS_DB, CATEGORIES, CATEGORY_COLORS } from '../movements_db';
 import { RM_NAMES, TYPE_COLORS as SHARED_TYPE_COLORS } from '../constants';
+import { parseDateFromDay } from '../dateUtils';
 
 const rmNames = RM_NAMES;
+
+function getDayParts(day) {
+  if (!day) return [];
+  const parts = [];
+  if (day.strength?.sets?.length) {
+    parts.push({ key: 'strength', label: 'FUERZA', isStrength: true, sets: day.strength.sets });
+  }
+  if (day.wod && day.type !== 'Libre') {
+    if (day.wod.parts?.length >= 1) {
+      day.wod.parts.forEach((p, i) => {
+        parts.push({ key: `wod_${i}`, label: p.label || `WOD ${i + 1}`, type: p.type, duration: p.duration });
+      });
+    } else {
+      parts.push({ key: 'wod', label: 'WOD', type: day.wod.type, duration: day.wod.duration });
+    }
+  }
+  return parts.length >= 2 ? parts : [];
+}
+
+function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
+  const t = useTheme();
+  const dayParts = getDayParts(day);
+  const isMulti = dayParts.length >= 2;
+
+  // Single-block state
+  const [rx, setRx] = useState(true);
+  const [minutos, setMinutos] = useState('');
+  const [segundos, setSegundos] = useState('');
+  const [rondas, setRondas] = useState('');
+  const [repsExtra, setRepsExtra] = useState('');
+  const [notas, setNotas] = useState('');
+
+  // Multi-block state: strength → { pesos: string[], notas, rx }
+  //                    wod     → { minutos, segundos, rondas, repsExtra, notas, rx }
+  const [partResults, setPartResults] = useState({});
+
+  useEffect(() => {
+    if (!visible || !day) return;
+    if (isMulti) {
+      const init = {};
+      dayParts.forEach(p => {
+        const saved = (savedResult?.partes || []).find(s => s.key === p.key);
+        if (p.isStrength) {
+          const raw = saved?.resultado ? saved.resultado.split(' / ').map(s => s.trim()) : [];
+          const pesos = Array(p.sets?.length || 1).fill('').map((_, i) => raw[i] || '');
+          init[p.key] = { pesos, notas: saved?.notas || '', rx: saved?.rx !== false };
+        } else {
+          const r = saved?.resultado || '';
+          const segs = r.split(' · ');
+          const rp = segs.find(s => /^\d+\+\d+$/.test(s.trim())) || '';
+          const tp = segs.find(s => /^\d{1,2}:\d{2}$/.test(s.trim())) || '';
+          const pr = { minutos: '', segundos: '', rondas: '', repsExtra: '', notas: saved?.notas || '', rx: saved?.rx !== false };
+          if (rp) { const [ron, rep] = rp.split('+'); pr.rondas = ron || ''; pr.repsExtra = rep || ''; }
+          if (tp) { const [min, sec] = tp.split(':'); pr.minutos = min || ''; pr.segundos = sec || ''; }
+          init[p.key] = pr;
+        }
+      });
+      setPartResults(init);
+    } else {
+      setRx(savedResult?.rx !== false);
+      setNotas(savedResult?.notas || '');
+      const r = savedResult?.resultado || '';
+      const segs = r.split(' · ');
+      const rp = segs.find(s => /^\d+\+\d+$/.test(s.trim())) || '';
+      const tp = segs.find(s => /^\d{1,2}:\d{2}$/.test(s.trim())) || '';
+      if (rp) { const [ron, rep] = rp.split('+'); setRondas(ron || ''); setRepsExtra(rep || ''); }
+      else { setRondas(''); setRepsExtra(''); }
+      if (tp) { const [min, sec] = tp.split(':'); setMinutos(min || ''); setSegundos(sec || ''); }
+      else { setMinutos(''); setSegundos(''); }
+    }
+  }, [visible, day?.day]);
+
+  const updatePart = (key, fields) =>
+    setPartResults(prev => ({ ...prev, [key]: { ...(prev[key] || {}), ...fields } }));
+
+  const updatePeso = (key, idx, val) =>
+    setPartResults(prev => {
+      const pesos = [...(prev[key]?.pesos || [])];
+      pesos[idx] = val;
+      return { ...prev, [key]: { ...(prev[key] || {}), pesos } };
+    });
+
+  const handleSave = () => {
+    if (isMulti) {
+      const partes = dayParts.map(p => {
+        const pr = partResults[p.key] || {};
+        let resultado;
+        if (p.isStrength) {
+          resultado = (pr.pesos || []).filter(Boolean).join(' / ');
+        } else {
+          const tp = pr.minutos ? `${pr.minutos.padStart(2,'0')}:${(pr.segundos||'00').padStart(2,'0')}` : '';
+          const rp = pr.rondas ? `${pr.rondas}+${pr.repsExtra||'0'}` : '';
+          resultado = [rp, tp].filter(Boolean).join(' · ');
+        }
+        return { key: p.key, label: p.label, resultado, notas: pr.notas || '', rx: pr.rx !== false };
+      });
+      const summary = partes.map(p => `${p.label}: ${p.resultado || '—'}`).join(' · ');
+      onSave({ resultado: summary, notas: '', fecha: new Date().toISOString(), rx: partes.every(p => p.rx), adaptacion: savedResult?.adaptacion || null, partes });
+    } else {
+      const tp = minutos ? `${minutos.padStart(2,'0')}:${(segundos||'00').padStart(2,'0')}` : '';
+      const rp = rondas ? `${rondas}+${repsExtra || '0'}` : '';
+      const resultado = [rp, tp].filter(Boolean).join(' · ');
+      onSave({ resultado, notas, fecha: new Date().toISOString(), rx, adaptacion: savedResult?.adaptacion || null });
+    }
+  };
+
+  const gbg = t.dark ? '#06100a' : '#e8f5e9';
+  const gborder = t.dark ? '#2e6e3250' : '#c8e6c9';
+  const ibg = t.dark ? '#080e0a' : '#fff';
+  const iborder = t.dark ? '#1a3a1e' : '#c8e6c9';
+  const icolor = t.dark ? '#81c784' : '#2e7d32';
+  const ph = t.dark ? '#2a4a2e' : '#81c784';
+  const inp = { backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, color: icolor, fontWeight: '700', padding: 12, textAlign: 'center', fontSize: t.fs(28) };
+  const lbl = { fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6, textAlign: 'center' };
+  const sep = { alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <View style={{ flex: 1, backgroundColor: t.bg }}>
+        <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: '#4caf50', padding: 16, paddingTop: 16 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View>
+              <Text style={{ fontSize: t.fs(10), color: '#4caf5088', letterSpacing: 3, fontWeight: '700' }}>EDITAR RESULTADO</Text>
+              <Text style={{ fontSize: t.fs(20), fontWeight: '900', color: t.text, marginTop: 2 }}>{day?.label || ''}</Text>
+              <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: 2 }}>{day?.day || ''}</Text>
+            </View>
+            <TouchableOpacity onPress={onClose}
+              style={{ backgroundColor: t.bg4, borderRadius: 8, padding: 8, borderWidth: 1, borderColor: t.border }}>
+              <Text style={{ fontSize: t.fs(12), color: t.text2, fontWeight: '700' }}>✕ CERRAR</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
+          {isMulti ? (
+            dayParts.map(part => {
+              const pr = partResults[part.key] || {};
+              const isRx = pr.rx !== false;
+              return (
+                <View key={part.key} style={{ backgroundColor: gbg, borderWidth: 1, borderColor: gborder, borderRadius: 10, padding: 14, marginBottom: 12 }}>
+                  {/* Cabecera del bloque */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <Text style={{ fontSize: t.fs(11), fontWeight: '700', color: '#4caf50', letterSpacing: 1 }}>
+                      {part.isStrength ? '💪 ' : '⚡ '}{part.label}
+                    </Text>
+                    {!part.isStrength && part.type && (
+                      <View style={{ backgroundColor: '#4caf5015', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ fontSize: t.fs(8), color: '#4caf50', fontWeight: '700' }}>
+                          {part.type}{part.duration ? ` · ${part.duration}` : ''}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Rx / Scaled */}
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                    <TouchableOpacity onPress={() => updatePart(part.key, { rx: true })}
+                      style={{ flex: 1, backgroundColor: isRx ? '#52b78820' : ibg, borderWidth: 1.5, borderColor: isRx ? '#52b788' : iborder, borderRadius: 8, padding: 8, alignItems: 'center' }}>
+                      <Text style={{ fontSize: t.fs(12), fontWeight: '900', color: isRx ? '#52b788' : ph }}>Rx</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => updatePart(part.key, { rx: false })}
+                      style={{ flex: 1, backgroundColor: !isRx ? '#f4a26120' : ibg, borderWidth: 1.5, borderColor: !isRx ? '#f4a261' : iborder, borderRadius: 8, padding: 8, alignItems: 'center' }}>
+                      <Text style={{ fontSize: t.fs(12), fontWeight: '900', color: !isRx ? '#f4a261' : ph }}>Scaled</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {part.isStrength ? (
+                    /* FUERZA: un input de peso por serie */
+                    <>
+                      {(part.sets || []).map((set, si) => {
+                        const p_pct = set.desc?.match(/(\d+)%/)?.[1];
+                        return (
+                          <View key={si} style={{ backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, padding: 10, marginBottom: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                              <View style={{ width: 20, height: 20, borderRadius: 4, backgroundColor: '#4caf5020', alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: t.fs(9), color: '#4caf50', fontWeight: '700' }}>{si + 1}</Text>
+                              </View>
+                              <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: icolor, flex: 1 }}>{set.desc}</Text>
+                              {p_pct && (
+                                <View style={{ height: 3, width: 40, backgroundColor: iborder, borderRadius: 2, overflow: 'hidden' }}>
+                                  <View style={{ height: 3, width: `${p_pct}%`, backgroundColor: '#4caf50', borderRadius: 2 }} />
+                                </View>
+                              )}
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <TextInput
+                                value={(pr.pesos || [])[si] || ''}
+                                onChangeText={v => updatePeso(part.key, si, v)}
+                                keyboardType="decimal-pad"
+                                placeholder="0"
+                                placeholderTextColor={ph}
+                                style={{ ...inp, flex: 1, fontSize: t.fs(22) }}
+                              />
+                              <Text style={{ fontSize: t.fs(13), color: icolor, fontWeight: '700' }}>kg</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </>
+                  ) : (
+                    /* WOD: MIN:SEG + RONDAS+REPS */
+                    <>
+                      <Text style={[lbl, { marginBottom: 8 }]}>TIEMPO REALIZADO</Text>
+                      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={lbl}>MIN</Text>
+                          <TextInput value={pr.minutos || ''} onChangeText={v => updatePart(part.key, { minutos: v })} keyboardType="numeric" placeholder="00" placeholderTextColor={ph} style={inp} />
+                        </View>
+                        <View style={sep}><Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>:</Text></View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={lbl}>SEG</Text>
+                          <TextInput value={pr.segundos || ''} onChangeText={v => updatePart(part.key, { segundos: v })} keyboardType="numeric" placeholder="00" placeholderTextColor={ph} style={inp} />
+                        </View>
+                      </View>
+                      <Text style={[lbl, { marginBottom: 8 }]}>RONDAS + REPS</Text>
+                      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={lbl}>RONDAS</Text>
+                          <TextInput value={pr.rondas || ''} onChangeText={v => updatePart(part.key, { rondas: v })} keyboardType="numeric" placeholder="0" placeholderTextColor={ph} style={inp} />
+                        </View>
+                        <View style={sep}><Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>+</Text></View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={lbl}>REPS EXTRA</Text>
+                          <TextInput value={pr.repsExtra || ''} onChangeText={v => updatePart(part.key, { repsExtra: v })} keyboardType="numeric" placeholder="0" placeholderTextColor={ph} style={inp} />
+                        </View>
+                      </View>
+                    </>
+                  )}
+
+                  <TextInput
+                    value={pr.notas || ''}
+                    onChangeText={v => updatePart(part.key, { notas: v })}
+                    placeholder="Notas..."
+                    placeholderTextColor={ph}
+                    multiline
+                    style={{ backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, color: icolor, fontSize: t.fs(13), padding: 10, textAlignVertical: 'top', marginTop: 4 }}
+                  />
+                </View>
+              );
+            })
+          ) : (
+            <View style={{ backgroundColor: gbg, borderWidth: 1, borderColor: gborder, borderRadius: 10, padding: 14 }}>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                <TouchableOpacity onPress={() => setRx(true)}
+                  style={{ flex: 1, backgroundColor: rx ? '#52b78820' : ibg, borderWidth: 1.5, borderColor: rx ? '#52b788' : iborder, borderRadius: 8, padding: 10, alignItems: 'center' }}>
+                  <Text style={{ fontSize: t.fs(13), fontWeight: '900', color: rx ? '#52b788' : ph }}>Rx</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setRx(false)}
+                  style={{ flex: 1, backgroundColor: !rx ? '#f4a26120' : ibg, borderWidth: 1.5, borderColor: !rx ? '#f4a261' : iborder, borderRadius: 8, padding: 10, alignItems: 'center' }}>
+                  <Text style={{ fontSize: t.fs(13), fontWeight: '900', color: !rx ? '#f4a261' : ph }}>Scaled</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={[lbl, { marginBottom: 8 }]}>TIEMPO REALIZADO</Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={lbl}>MIN</Text>
+                  <TextInput value={minutos} onChangeText={setMinutos} keyboardType="numeric" placeholder="00" placeholderTextColor={ph} style={inp} />
+                </View>
+                <View style={sep}><Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>:</Text></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={lbl}>SEG</Text>
+                  <TextInput value={segundos} onChangeText={setSegundos} keyboardType="numeric" placeholder="00" placeholderTextColor={ph} style={inp} />
+                </View>
+              </View>
+
+              <Text style={[lbl, { marginBottom: 8 }]}>RONDAS + REPS</Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={lbl}>RONDAS</Text>
+                  <TextInput value={rondas} onChangeText={setRondas} keyboardType="numeric" placeholder="0" placeholderTextColor={ph} style={inp} />
+                </View>
+                <View style={sep}><Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>+</Text></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={lbl}>REPS EXTRA</Text>
+                  <TextInput value={repsExtra} onChangeText={setRepsExtra} keyboardType="numeric" placeholder="0" placeholderTextColor={ph} style={inp} />
+                </View>
+              </View>
+
+              <TextInput
+                value={notas} onChangeText={setNotas}
+                placeholder="Notas de la sesión..."
+                placeholderTextColor={ph}
+                multiline numberOfLines={3}
+                style={{ backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, color: icolor, fontSize: t.fs(13), padding: 12, textAlignVertical: 'top', marginBottom: 10 }}
+              />
+            </View>
+          )}
+
+          <TouchableOpacity onPress={handleSave}
+            style={{ backgroundColor: '#2e6e32', borderRadius: 10, padding: 16, alignItems: 'center', marginTop: 12 }}>
+            <Text style={{ color: '#fff', fontWeight: '900', fontSize: t.fs(14), letterSpacing: 1 }}>💾 GUARDAR CAMBIOS</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
 
 const WOD_TYPES = ['AMRAP', 'FOR TIME', 'EMOM', 'STRENGTH', 'LIBRE'];
 
@@ -25,7 +324,7 @@ function MovementPicker({ visible, onClose, onSelect }) {
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <View style={{ flex: 1, backgroundColor: t.bg }}>
-        <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16, paddingTop: 56 }}>
+        <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16, paddingTop: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <Text style={{ fontSize: t.fs(20), fontWeight: '900', color: t.text, letterSpacing: 1 }}>AÑADIR MOVIMIENTO</Text>
             <TouchableOpacity onPress={onClose}
@@ -133,7 +432,7 @@ function WodCreator({ visible, onClose, onSave }) {
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <MovementPicker visible={showPicker} onClose={() => setShowPicker(false)} onSelect={addMovement} />
       <View style={{ flex: 1, backgroundColor: t.bg }}>
-        <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16, paddingTop: 56 }}>
+        <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16, paddingTop: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={{ fontSize: t.fs(22), fontWeight: '900', color: t.text, letterSpacing: 1 }}>NUEVO WOD</Text>
             <TouchableOpacity onPress={() => { reset(); onClose(); }}
@@ -277,24 +576,42 @@ function WodCreator({ visible, onClose, onSave }) {
 export default function HistorialScreen() {
   const { resultados, rms, saveResultado, wodsLibres, saveWodLibre, deleteWodLibre, partnerProfile, partnerResultados } = useApp();
   const t = useTheme();
-  const { activeProgram } = useProgram();
+  const { activeProgram, programs } = useProgram();
   const { feed, esAmigo } = useSocial();
   const [expanded, setExpanded] = useState(null);
   const [tab, setTab] = useState('yo');
   const [showCreator, setShowCreator] = useState(false);
   const [filterTipo, setFilterTipo] = useState(null);
   const [filterFormato, setFilterFormato] = useState(null);
+  const [editingDay, setEditingDay] = useState(null);
 
-  const allDays = activeProgram
+  // Combine days from ALL programs so history from previous blocks appears
+  const allDays = programs.length > 0
+    ? programs
+        .flatMap((prog, pi) =>
+          prog.weeks.flatMap((w, wi) =>
+            w.days.map((d, di) => ({ ...d, weekIndex: wi, dayIndex: di, weekNumber: w.number }))
+          )
+        )
+        .sort((a, b) => {
+          const da = parseDateFromDay(a.day);
+          const db = parseDateFromDay(b.day);
+          if (!da || !db) return 0;
+          return db.getTime() - da.getTime();
+        })
+    : [];
+
+  // Pending days = only active program (makes sense to track pending for current block)
+  const activeDays = activeProgram
     ? activeProgram.weeks.flatMap((w, wi) =>
-        w.days.map((d, di) => ({ ...d, weekIndex: wi, dayIndex: di, weekNumber: w.number }))
+        w.days.map((d, di) => ({ ...d, weekIndex: wi, dayIndex: di }))
       )
     : [];
 
   const typeColors = SHARED_TYPE_COLORS;
 
   const diasConResultado = allDays.filter(d => resultados[d.day]);
-  const diasSinResultado = allDays.filter(d => !resultados[d.day] && d.type !== 'Libre');
+  const diasSinResultado = activeDays.filter(d => !resultados[d.day] && d.type !== 'Libre');
 
   const tiposEnPrograma = [...new Set(allDays.map(d => d.type).filter(Boolean))];
 
@@ -330,9 +647,19 @@ export default function HistorialScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       <WodCreator visible={showCreator} onClose={() => setShowCreator(false)} onSave={handleSaveWodLibre} />
+      <EditResultModal
+        visible={!!editingDay}
+        day={editingDay}
+        savedResult={editingDay ? resultados[editingDay.day] : null}
+        onSave={async (data) => {
+          await saveResultado(editingDay.day, data);
+          setEditingDay(null);
+        }}
+        onClose={() => setEditingDay(null)}
+      />
 
       {/* HEADER */}
-      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 20, paddingTop: 60 }}>
+      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 20 }}>
         <Text style={{ fontSize: t.fs(10), color: t.accent + '88', letterSpacing: 4, fontWeight: '700' }}>REGISTRO DEL BLOQUE</Text>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
           <Text style={{ fontSize: t.fs(32), fontWeight: '900', letterSpacing: 2, color: t.text }}>HISTORIAL</Text>
@@ -429,9 +756,9 @@ export default function HistorialScreen() {
               const companeros = companerosPorDia[day.day] || [];
 
               return (
-                <TouchableOpacity key={i} onPress={() => setExpanded(isOpen ? null : day.day)}
-                  style={{ backgroundColor: t.card, borderWidth: 1, borderColor: isOpen ? accent + '50' : t.border, borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 }}>
+                <View key={i} style={{ backgroundColor: t.card, borderWidth: 1, borderColor: isOpen ? accent + '50' : t.border, borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
+                  <TouchableOpacity onPress={() => setExpanded(isOpen ? null : day.day)}
+                    style={{ flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 }}>
                     <View style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: accent + '20', borderWidth: 1, borderColor: accent + '40', alignItems: 'center', justifyContent: 'center' }}>
                       <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: accent, letterSpacing: 0.5, textAlign: 'center' }}>
                         {day.day.split(' ')[0].substring(0, 3).toUpperCase()}{'\n'}{day.day.split(' ')[1]}
@@ -445,12 +772,19 @@ export default function HistorialScreen() {
                       <Text style={{ fontSize: t.fs(16), fontWeight: '900', color: accent }}>{res.resultado || '—'}</Text>
                       <Text style={{ fontSize: t.fs(9), color: t.text3, marginTop: 2 }}>{isOpen ? '▴' : '▾'}</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
 
                   {isOpen && (
                     <View style={{ borderTopWidth: 1, borderTopColor: t.border, padding: 14 }}>
                       <View style={{ backgroundColor: accent + '10', borderRadius: 8, padding: 12, marginBottom: 12 }}>
-                        <Text style={{ fontSize: t.fs(10), color: accent, letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>📊 RESULTADO</Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <Text style={{ fontSize: t.fs(10), color: accent, letterSpacing: 2, fontWeight: '700' }}>📊 RESULTADO</Text>
+                          <TouchableOpacity
+                            onPress={() => { setExpanded(null); setEditingDay(day); }}
+                            style={{ backgroundColor: accent, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 }}>
+                            <Text style={{ fontSize: t.fs(9), fontWeight: '900', color: '#fff' }}>✏️ EDITAR</Text>
+                          </TouchableOpacity>
+                        </View>
                         <Text style={{ fontSize: t.fs(24), fontWeight: '900', color: accent }}>{res.resultado || 'No registrado'}</Text>
                         {res.fecha && (
                           <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: 4 }}>
@@ -458,6 +792,28 @@ export default function HistorialScreen() {
                           </Text>
                         )}
                       </View>
+
+                      {res.partes?.length > 0 && (
+                        <View style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                          <Text style={{ fontSize: t.fs(10), color: accent, letterSpacing: 2, fontWeight: '700', marginBottom: 10 }}>📋 DESGLOSE POR BLOQUE</Text>
+                          {res.partes.map((parte, pi) => (
+                            <View key={pi} style={{ marginBottom: pi < res.partes.length - 1 ? 10 : 0, paddingBottom: pi < res.partes.length - 1 ? 10 : 0, borderBottomWidth: pi < res.partes.length - 1 ? 1 : 0, borderBottomColor: t.border }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                <View style={{ backgroundColor: accent + '20', borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2 }}>
+                                  <Text style={{ fontSize: t.fs(8), fontWeight: '700', color: accent }}>{parte.label || `Bloque ${pi + 1}`}</Text>
+                                </View>
+                                {parte.rx !== false && (
+                                  <View style={{ backgroundColor: accent + '15', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                                    <Text style={{ fontSize: t.fs(7), fontWeight: '700', color: accent }}>Rx</Text>
+                                  </View>
+                                )}
+                              </View>
+                              <Text style={{ fontSize: t.fs(18), fontWeight: '900', color: accent }}>{parte.resultado || '—'}</Text>
+                              {!!parte.notas && <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 3, fontStyle: 'italic' }}>"{parte.notas}"</Text>}
+                            </View>
+                          ))}
+                        </View>
+                      )}
 
                       {res.notas ? (
                         <View style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 12, marginBottom: 12 }}>
@@ -476,16 +832,60 @@ export default function HistorialScreen() {
                         </View>
                       )}
 
-                      {day.wod.movements && day.wod.movements.length > 0 && (
+                      {day.strength && (
                         <View style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 12, marginBottom: 12 }}>
-                          <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>⚡ MOVIMIENTOS</Text>
-                          {day.wod.movements.map((m, j) => (
-                            <View key={j} style={{ flexDirection: 'row', gap: 8, marginBottom: 5 }}>
-                              <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: accent, minWidth: 30 }}>{m.reps}</Text>
-                              <Text style={{ fontSize: t.fs(12), color: t.text }}>{m.name}</Text>
-                              {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text3 }}>· {m.weight}</Text>}
+                          <Text style={{ fontSize: t.fs(10), color: accent, letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>💪 FUERZA</Text>
+                          <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text, marginBottom: 8 }}>{day.strength.name}</Text>
+                          {day.strength.sets?.map((s, j) => (
+                            <View key={j} style={{ flexDirection: 'row', gap: 8, marginBottom: 5, alignItems: 'center' }}>
+                              <View style={{ width: 20, height: 20, borderRadius: 4, backgroundColor: accent + '20', alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: accent }}>{j + 1}</Text>
+                              </View>
+                              <Text style={{ fontSize: t.fs(12), color: t.text, flex: 1 }}>{s.desc}</Text>
+                              {s.note ? <Text style={{ fontSize: t.fs(11), color: t.text3 }}>{s.note}</Text> : null}
                             </View>
                           ))}
+                        </View>
+                      )}
+
+                      {day.wod && (day.wod.movements?.length > 0 || day.wod.parts?.length > 0 || day.wod.emomMinutes) && (
+                        <View style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                          <Text style={{ fontSize: t.fs(10), color: accent, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>
+                            ⚡ WOD{!day.wod.parts && day.wod.type ? ` · ${day.wod.type}${day.wod.duration ? ` ${day.wod.duration}` : ''}` : ''}
+                          </Text>
+                          {day.wod.parts?.length > 0
+                            ? day.wod.parts.map((part, pi) => (
+                                <View key={pi} style={{ marginBottom: pi < day.wod.parts.length - 1 ? 10 : 0 }}>
+                                  <View style={{ backgroundColor: accent + '20', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', marginBottom: 6 }}>
+                                    <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: accent }}>
+                                      {part.label || `WOD ${pi + 1}`}{part.type ? ` · ${part.type}` : ''}{part.duration ? ` · ${part.duration}` : ''}
+                                    </Text>
+                                  </View>
+                                  {part.movements?.filter(m => m.name !== '—').map((m, j) => (
+                                    <View key={j} style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
+                                      <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: accent, minWidth: 30 }}>{m.reps}</Text>
+                                      <Text style={{ fontSize: t.fs(12), color: t.text, flex: 1 }}>{m.name}</Text>
+                                      {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text3 }}>· {m.weight}</Text>}
+                                    </View>
+                                  ))}
+                                  {pi < day.wod.parts.length - 1 && <View style={{ height: 1, backgroundColor: t.border, marginTop: 8 }} />}
+                                </View>
+                              ))
+                            : day.wod.emomMinutes
+                            ? day.wod.emomMinutes.map((min, j) => (
+                                <View key={j} style={{ flexDirection: 'row', gap: 8, marginBottom: 5 }}>
+                                  <Text style={{ fontSize: t.fs(10), fontWeight: '700', color: accent, minWidth: 52 }}>{min.min}</Text>
+                                  <Text style={{ fontSize: t.fs(12), color: t.text }}>{min.work}</Text>
+                                </View>
+                              ))
+                            : day.wod.movements?.filter(m => m.name !== '—').map((m, j) => (
+                                <View key={j} style={{ flexDirection: 'row', gap: 8, marginBottom: 5 }}>
+                                  <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: accent, minWidth: 30 }}>{m.reps}</Text>
+                                  <Text style={{ fontSize: t.fs(12), color: t.text, flex: 1 }}>{m.name}</Text>
+                                  {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text3 }}>· {m.weight}</Text>}
+                                </View>
+                              ))
+                          }
                         </View>
                       )}
 
@@ -531,7 +931,7 @@ export default function HistorialScreen() {
                       )}
                     </View>
                   )}
-                </TouchableOpacity>
+                </View>
               );
             })}
 
@@ -541,7 +941,8 @@ export default function HistorialScreen() {
                 {diasSinResultado.map((day, i) => {
                   const accent = typeColors[day.type] || t.accent;
                   return (
-                    <View key={i} style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 10, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 12, opacity: 0.5 }}>
+                    <TouchableOpacity key={i} onPress={() => setEditingDay(day)}
+                      style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 10, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                       <View style={{ width: 36, height: 36, borderRadius: 6, backgroundColor: accent + '15', alignItems: 'center', justifyContent: 'center' }}>
                         <Text style={{ fontSize: t.fs(8), fontWeight: '700', color: accent, textAlign: 'center' }}>
                           {day.day.split(' ')[0].substring(0, 3).toUpperCase()}{'\n'}{day.day.split(' ')[1]}
@@ -551,8 +952,10 @@ export default function HistorialScreen() {
                         <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{day.label}</Text>
                         <Text style={{ fontSize: t.fs(10), color: t.text3 }}>S{day.weekNumber} · Sin resultado</Text>
                       </View>
-                      <Text style={{ fontSize: t.fs(18), color: t.text3 }}>○</Text>
-                    </View>
+                      <View style={{ backgroundColor: accent + '15', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}>
+                        <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: accent }}>+ ANOTAR</Text>
+                      </View>
+                    </TouchableOpacity>
                   );
                 })}
               </>

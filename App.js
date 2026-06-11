@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
-import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useState, useEffect } from 'react';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import SplashAnimated from './SplashAnimated';
 import { AppProvider } from './AppContext';
 import { ThemeProvider, useTheme } from './ThemeContext';
@@ -30,22 +31,15 @@ const SCREENS = {
   PERFIL: ProfileScreen,
 };
 
-const TAB_LABELS = {
-  PROGRAM: 'PROGRAM',
-  WOD: 'WOD',
-  TIMER: 'TIMER',
-  RM: '1RM',
-  HISTORIAL: 'HISTORIAL',
-  SOCIAL: 'SOCIAL',
-  PERFIL: 'PERFIL',
-};
+const TAB_ICONS  = { PROGRAM:'🏠', WOD:'⚡', TIMER:'⏱', RM:'💪', HISTORIAL:'📋', SOCIAL:'👥', PERFIL:'👤' };
+const TAB_LABELS = { PROGRAM:'PROG', WOD:'WOD', TIMER:'TIMER', RM:'1RM', HISTORIAL:'HIST', SOCIAL:'SOCIAL', PERFIL:'PERFIL' };
 
 function AppInner() {
   const [active, setActive] = useState('PROGRAM');
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
-  const Screen = SCREENS[active];
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const { userProfile, loadingProfile, onboardingCompleted } = useApp();
 
   useEffect(() => {
@@ -75,48 +69,65 @@ function AppInner() {
   if (userProfile && !onboardingCompleted) {
     return <OnboardingScreen onComplete={() => {}} />;
   }
+
   return (
     <SocialProvider>
-    <View style={{ flex: 1, backgroundColor: t.bg }}>
-      <StatusBar style={t.dark ? 'light' : 'dark'} />
-      <View style={{ flex: 1 }}>
-        {Screen ? <Screen navigate={setActive} session={session} /> : null}
-      </View>
-      <View style={{ backgroundColor: t.dark ? '#07070e' : '#ffffff', borderTopWidth: 1, borderTopColor: t.border }}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: 24 }}
-        >
-          {Object.keys(SCREENS).map(key => (
-            <TouchableOpacity
-              key={key}
-              onPress={() => setActive(key)}
-              style={{
-                paddingHorizontal: 20,
-                paddingTop: 10,
-                paddingBottom: 6,
-                alignItems: 'center',
-                borderBottomWidth: 2.5,
-                borderBottomColor: active === key ? t.accent : 'transparent',
-              }}
-            >
-              <Text
-                numberOfLines={1}
+      <View style={{ flex: 1, backgroundColor: t.bg }}>
+        <StatusBar style={t.dark ? 'light' : 'dark'} />
+
+        {/* ── BARRA DE NAVEGACIÓN SUPERIOR ── */}
+        <View style={{
+          backgroundColor: t.header,
+          paddingTop: insets.top,
+          borderBottomWidth: 1,
+          borderBottomColor: t.border,
+          flexDirection: 'row',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: t.dark ? 0.4 : 0.08,
+          shadowRadius: 6,
+          elevation: 6,
+          zIndex: 10,
+        }}>
+          {Object.keys(SCREENS).map(key => {
+            const isActive = active === key;
+            return (
+              <TouchableOpacity
+                key={key}
+                onPress={() => setActive(key)}
                 style={{
-                  color: active === key ? t.accent : t.text3,
-                  fontSize: t.fs(12),
-                  fontWeight: '700',
-                  letterSpacing: 1,
+                  flex: 1,
+                  alignItems: 'center',
+                  paddingTop: 10,
+                  paddingBottom: 8,
+                  borderBottomWidth: 2.5,
+                  borderBottomColor: isActive ? t.accent : 'transparent',
                 }}
               >
-                {TAB_LABELS[key]}
-              </Text>
-            </TouchableOpacity>
+                <Text style={{ fontSize: 18, lineHeight: 22 }}>{TAB_ICONS[key]}</Text>
+                <Text style={{
+                  fontSize: 7,
+                  fontWeight: '800',
+                  letterSpacing: 0.3,
+                  marginTop: 2,
+                  color: isActive ? t.accent : t.text3,
+                }}>
+                  {TAB_LABELS[key]}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* ── CONTENIDO ── */}
+        <View style={{ flex: 1 }}>
+          {Object.entries(SCREENS).map(([key, ScreenComp]) => (
+            <View key={key} style={{ flex: 1, display: active === key ? 'flex' : 'none' }}>
+              <ScreenComp navigate={setActive} session={session} />
+            </View>
           ))}
-        </ScrollView>
+        </View>
       </View>
-    </View>
     </SocialProvider>
   );
 }
@@ -125,20 +136,22 @@ export default function App() {
   const [showSplash, setShowSplash] = useState(true);
 
   return (
-    <View style={{ flex: 1 }}>
-      <ThemeProvider>
-        <ProgramProvider>
-          <NotificationProvider>
-            <AppProvider>
-              <AppInner />
-            </AppProvider>
-          </NotificationProvider>
-        </ProgramProvider>
-      </ThemeProvider>
+    <SafeAreaProvider>
+      <View style={{ flex: 1 }}>
+        <ThemeProvider>
+          <ProgramProvider>
+            <NotificationProvider>
+              <AppProvider>
+                <AppInner />
+              </AppProvider>
+            </NotificationProvider>
+          </ProgramProvider>
+        </ThemeProvider>
 
-      {showSplash && (
-        <SplashAnimated onFinish={() => setShowSplash(false)} />
-      )}
-    </View>
+        {showSplash && (
+          <SplashAnimated onFinish={() => setShowSplash(false)} />
+        )}
+      </View>
+    </SafeAreaProvider>
   );
 }

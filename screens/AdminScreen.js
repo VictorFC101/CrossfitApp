@@ -8,7 +8,9 @@ import { supabase } from '../supabase';
 import ProgramBuilderScreen from './ProgramBuilderScreen';
 import AssignProgramScreen from './AssignProgramScreen';
 import { mayo2026 } from '../assets/mayo2026';
+import { junio2026 } from '../assets/junio2026';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 
 const MESES_LARGOS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -163,10 +165,11 @@ function AddJsonModal({ visible, onClose, onSave }) {
   const [error, setError] = useState('');
   const [preview, setPreview] = useState(null);
   const [fileName, setFileName] = useState('');
+  const [fileSize, setFileSize] = useState(0);
   const [programName, setProgramName] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const reset = () => { setError(''); setPreview(null); setFileName(''); setProgramName(''); };
+  const reset = () => { setError(''); setPreview(null); setFileName(''); setFileSize(0); setProgramName(''); };
 
   const pickFile = async () => {
     setLoading(true);
@@ -175,7 +178,18 @@ function AddJsonModal({ visible, onClose, onSave }) {
       if (result.canceled) { setLoading(false); return; }
       const asset = result.assets[0];
       setFileName(asset.name);
-      let text = await fetch(asset.uri).then(r => r.text());
+      // Usamos expo-file-system (no fetch().text()): fetch sobre URIs file:// puede
+      // truncar archivos grandes con muchos caracteres multibyte (emojis), provocando
+      // "Unexpected end of input" al hacer JSON.parse de un texto cortado a mitad.
+      let text = await FileSystem.readAsStringAsync(asset.uri);
+      setFileSize(text.length);
+      if (!text || !text.trim()) {
+        throw new Error('El archivo está vacío o no se pudo leer correctamente');
+      }
+      const trimmed = text.trimStart();
+      if (!trimmed.startsWith('{') && !trimmed.startsWith('[') && !trimmed.startsWith('import ') && !trimmed.startsWith('export ')) {
+        throw new Error('El contenido no parece JSON ni un módulo .js válido (¿archivo incompleto o corrupto?)');
+      }
       let parsed;
       // Detecta .jsx/.js: strip imports y convierte object literal a JSON
       const isJsFile = /\.(jsx?|tsx?)$/i.test(asset.name) ||
@@ -202,9 +216,17 @@ function AddJsonModal({ visible, onClose, onSave }) {
         obj = obj.replace(/,(\s*[}\]])/g, '$1');
         // 6. Claves sin comillas → con comillas
         obj = obj.replace(/([{,]\s*)([a-zA-Z_$][\w$]*)\s*:/g, '$1"$2":');
-        parsed = JSON.parse(obj);
+        try {
+          parsed = JSON.parse(obj);
+        } catch (parseErr) {
+          throw new Error(`${parseErr.message} (archivo de ${text.length} caracteres — revisa que esté completo)`);
+        }
       } else {
-        parsed = JSON.parse(text);
+        try {
+          parsed = JSON.parse(text);
+        } catch (parseErr) {
+          throw new Error(`${parseErr.message} (archivo de ${text.length} caracteres — revisa que esté completo)`);
+        }
       }
       if (!parsed.weeks || !Array.isArray(parsed.weeks)) throw new Error('Falta el campo "weeks"');
       if (parsed.weeks.length === 0) throw new Error('"weeks" no puede estar vacío');
@@ -274,6 +296,11 @@ function AddJsonModal({ visible, onClose, onSave }) {
                 <Text style={{ color: '#52b788', fontSize: t.fs(11), marginBottom: 2 }}>
                   {preview.weeks.length} semanas · {preview.weeks.reduce((a, w) => a + w.days.length, 0)} días · Fechas eliminadas
                 </Text>
+                {fileSize > 0 && (
+                  <Text style={{ color: '#52b788', fontSize: t.fs(10), marginTop: 2, opacity: 0.8 }}>
+                    📄 {fileSize.toLocaleString('es-ES')} caracteres leídos
+                  </Text>
+                )}
               </View>
 
               <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>NOMBRE DEL PROGRAMA</Text>
@@ -1445,13 +1472,22 @@ export default function AdminScreen({ onClose }) {
           <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700' }}>
             TODOS LOS PROGRAMAS ({programs.length})
           </Text>
-          {!programs.some(p => p.name?.toLowerCase().includes('mayo')) && (
-            <TouchableOpacity
-              onPress={() => handleAdd({ ...mayo2026, id: undefined })}
-              style={{ backgroundColor: '#06d6a020', borderWidth: 1, borderColor: '#06d6a060', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}>
-              <Text style={{ fontSize: t.fs(10), color: '#06d6a0', fontWeight: '700' }}>+ IMPORTAR MAYO 2026</Text>
-            </TouchableOpacity>
-          )}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {!programs.some(p => p.name?.toLowerCase().includes('mayo')) && (
+              <TouchableOpacity
+                onPress={() => handleAdd({ ...mayo2026, id: undefined })}
+                style={{ backgroundColor: '#06d6a020', borderWidth: 1, borderColor: '#06d6a060', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}>
+                <Text style={{ fontSize: t.fs(10), color: '#06d6a0', fontWeight: '700' }}>+ MAYO 2026</Text>
+              </TouchableOpacity>
+            )}
+            {!programs.some(p => p.name?.toLowerCase().includes('junio')) && (
+              <TouchableOpacity
+                onPress={() => handleAdd({ ...junio2026, id: undefined })}
+                style={{ backgroundColor: '#3a86ff20', borderWidth: 1, borderColor: '#3a86ff60', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}>
+                <Text style={{ fontSize: t.fs(10), color: '#3a86ff', fontWeight: '700' }}>+ JUNIO 2026</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
         {programs.map((program) => {
           const isTemplate = !!program._isTemplate;

@@ -152,14 +152,21 @@ function ShareCard({ day, resultado, notas, rx, acento }) {
   );
 }
 
-// ── Tira de progresión — últimos 4 resultados ─────────────────
+// ── Tira de progresión — últimos 4 resultados del mismo movimiento ─────────────────
 const MONTHS_S = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 function fmtDateShort(iso) {
   try { const d = new Date(iso); return `${d.getDate()} ${MONTHS_S[d.getMonth()]}`; } catch { return ''; }
 }
-function ProgressStrip({ resultados, currentDayKey, t }) {
+function ProgressStrip({ resultados, currentDayKey, day, allDaysFlat, t }) {
+  // Solo mostrar progresión si el día tiene rmKey (movimiento de fuerza)
+  if (!day?.rmKey) return null;
+
+  // Mapa dayKey → rmKey de todos los días del programa
+  const dayRmKeyMap = {};
+  (allDaysFlat || []).forEach(d => { dayRmKeyMap[d.day] = d.rmKey || null; });
+
   const entries = Object.entries(resultados)
-    .filter(([k, v]) => k !== currentDayKey && v?.resultado)
+    .filter(([k, v]) => k !== currentDayKey && v?.resultado && dayRmKeyMap[k] === day.rmKey)
     .map(([k, v]) => {
       const segs = (v.resultado || '').split(' · ');
       const roundsPart = segs.find(s => /^\d+\+\d+$/.test(s.trim())) || '';
@@ -201,7 +208,7 @@ function ProgressStrip({ resultados, currentDayKey, t }) {
 
   return (
     <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.accent + '30', borderRadius: 10, padding: 14, marginBottom: 10 }}>
-      <Text style={{ fontSize: t.fs(10), fontWeight: '700', letterSpacing: 2, color: t.accent, marginBottom: 14 }}>📈 TU PROGRESIÓN</Text>
+      <Text style={{ fontSize: t.fs(10), fontWeight: '700', letterSpacing: 2, color: t.accent, marginBottom: 14 }}>📈 PROGRESIÓN — {day?.label || ''}</Text>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {entries.map((e, i) => (
           <View key={e.key} style={{ flex: 1, alignItems: 'center' }}>
@@ -331,6 +338,107 @@ function AdaptModal({ visible, originalMovements, adaptacion, hasAdaptacion, onS
   );
 }
 
+// ── Detectar bloques guardables del día ──────────────────────
+function getDayParts(day) {
+  if (!day) return [];
+  const parts = [];
+  if (day.strength?.sets?.length) {
+    parts.push({ key: 'strength', label: 'FUERZA', isStrength: true });
+  }
+  if (day.wod && day.type !== 'Libre') {
+    if (day.wod.parts?.length >= 1) {
+      day.wod.parts.forEach((p, i) => {
+        parts.push({ key: `wod_${i}`, label: p.label || `WOD ${i + 1}`, type: p.type, duration: p.duration });
+      });
+    } else {
+      parts.push({ key: 'wod', label: 'WOD', type: day.wod.type, duration: day.wod.duration });
+    }
+  }
+  return parts.length >= 2 ? parts : [];
+}
+
+// ── Tarjeta de resultado para un bloque individual ────────────
+function PartResultCard({ part, pr = {}, onChange, t }) {
+  const isRx = pr.rx !== false;
+  const gbg = t.dark ? '#06100a' : '#e8f5e9';
+  const gborder = t.dark ? '#2e6e3250' : '#c8e6c9';
+  const ibg = t.dark ? '#080e0a' : '#fff';
+  const iborder = t.dark ? '#1a3a1e' : '#c8e6c9';
+  const icolor = t.dark ? '#81c784' : '#2e7d32';
+  const ph = t.dark ? '#2a4a2e' : '#81c784';
+  const lbl = { fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6, textAlign: 'center' };
+  const inp = { backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, color: icolor, fontWeight: '700', padding: 12, textAlign: 'center', fontSize: t.fs(32) };
+
+  return (
+    <View style={{ backgroundColor: gbg, borderWidth: 1, borderColor: gborder, borderRadius: 10, padding: 14, marginBottom: 10 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <Text style={{ fontSize: t.fs(11), fontWeight: '700', color: '#4caf50', letterSpacing: 1 }}>
+          {part.isStrength ? '💪 ' : '⚡ '}{part.label}
+        </Text>
+        {!part.isStrength && part.type && (
+          <View style={{ backgroundColor: '#4caf5015', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+            <Text style={{ fontSize: t.fs(8), color: '#4caf50', fontWeight: '700' }}>
+              {part.type}{part.duration ? ` · ${part.duration}` : ''}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+        <TouchableOpacity onPress={() => onChange({ rx: true })}
+          style={{ flex: 1, backgroundColor: isRx ? '#52b78820' : ibg, borderWidth: 1.5, borderColor: isRx ? '#52b788' : iborder, borderRadius: 8, padding: 8, alignItems: 'center' }}>
+          <Text style={{ fontSize: t.fs(12), fontWeight: '900', color: isRx ? '#52b788' : ph }}>Rx</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => onChange({ rx: false })}
+          style={{ flex: 1, backgroundColor: !isRx ? '#f4a26120' : ibg, borderWidth: 1.5, borderColor: !isRx ? '#f4a261' : iborder, borderRadius: 8, padding: 8, alignItems: 'center' }}>
+          <Text style={{ fontSize: t.fs(12), fontWeight: '900', color: !isRx ? '#f4a261' : ph }}>Scaled</Text>
+        </TouchableOpacity>
+      </View>
+
+      {part.isStrength ? (
+        <TextInput value={pr.resultado || ''} onChangeText={v => onChange({ resultado: v })}
+          placeholder="Ej: 5×80kg" placeholderTextColor={ph}
+          style={{ ...inp, fontSize: t.fs(22), marginBottom: 12 }} />
+      ) : (
+        <>
+          <Text style={[lbl, { marginBottom: 8 }]}>TIEMPO</Text>
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={lbl}>MIN</Text>
+              <TextInput value={pr.minutos || ''} onChangeText={v => onChange({ minutos: v })} keyboardType="numeric" placeholder="00" placeholderTextColor={ph} style={inp} />
+            </View>
+            <View style={{ alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 }}>
+              <Text style={{ fontSize: t.fs(22), color: '#4caf50', fontWeight: '900' }}>:</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={lbl}>SEG</Text>
+              <TextInput value={pr.segundos || ''} onChangeText={v => onChange({ segundos: v })} keyboardType="numeric" placeholder="00" placeholderTextColor={ph} style={inp} />
+            </View>
+          </View>
+          <Text style={[lbl, { marginBottom: 8 }]}>RONDAS + REPS</Text>
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={lbl}>RONDAS</Text>
+              <TextInput value={pr.rondas || ''} onChangeText={v => onChange({ rondas: v })} keyboardType="numeric" placeholder="0" placeholderTextColor={ph} style={inp} />
+            </View>
+            <View style={{ alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 }}>
+              <Text style={{ fontSize: t.fs(22), color: '#4caf50', fontWeight: '900' }}>+</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={lbl}>REPS</Text>
+              <TextInput value={pr.repsExtra || ''} onChangeText={v => onChange({ repsExtra: v })} keyboardType="numeric" placeholder="0" placeholderTextColor={ph} style={inp} />
+            </View>
+          </View>
+        </>
+      )}
+
+      <TextInput value={pr.notas || ''} onChangeText={v => onChange({ notas: v })}
+        placeholder="Notas..." placeholderTextColor={ph} multiline numberOfLines={2}
+        style={{ backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, color: icolor, fontSize: t.fs(13), padding: 12, textAlignVertical: 'top' }} />
+    </View>
+  );
+}
+
 function detectFormat(wod) {
   if (!wod) return 'text';
   if (wod.emomMinutes) return 'emom';
@@ -358,6 +466,7 @@ export default function WodScreen({ navigate }) {
   const [sharing, setSharing]     = useState(false);
   const [adaptacion, setAdaptacion] = useState(null);
   const [showAdaptModal, setShowAdaptModal] = useState(false);
+  const [partResults, setPartResults] = useState({});
   const shareCardRef              = useRef(null);
 
   const allDaysFlat = activeProgram
@@ -367,6 +476,7 @@ export default function WodScreen({ navigate }) {
   const day = allDaysFlat.length > 0 ? getTodayDay(allDaysFlat) : null;
 
   const savedResult = day ? resultados[day.day] : null;
+  const dayParts = getDayParts(day);
 
   useEffect(() => {
     setNotas(savedResult?.notas || '');
@@ -381,7 +491,55 @@ export default function WodScreen({ navigate }) {
     else { setRondas(''); setRepsExtra(''); }
     if (timePart) { const [min, sec] = timePart.split(':'); setMinutos(min || ''); setSegundos(sec || ''); }
     else { setMinutos(''); setSegundos(''); }
+    // Inicializar resultados de partes si el día tiene bloques múltiples
+    const parts = getDayParts(day);
+    if (parts.length >= 2) {
+      const init = {};
+      parts.forEach(p => {
+        const saved = (savedResult?.partes || []).find(s => s.key === p.key);
+        const pr = { resultado: '', minutos: '', segundos: '', rondas: '', repsExtra: '', notas: '', rx: true };
+        if (saved) {
+          pr.resultado = saved.resultado || '';
+          pr.notas = saved.notas || '';
+          pr.rx = saved.rx !== false;
+          const ss = (saved.resultado || '').split(' · ');
+          const rp = ss.find(s => /^\d+\+\d+$/.test(s.trim()));
+          const tp = ss.find(s => /^\d{1,2}:\d{2}$/.test(s.trim()));
+          if (rp) { const [ron, rep] = rp.split('+'); pr.rondas = ron || ''; pr.repsExtra = rep || ''; }
+          if (tp) { const [min, sec] = tp.split(':'); pr.minutos = min || ''; pr.segundos = sec || ''; }
+        }
+        init[p.key] = pr;
+      });
+      setPartResults(init);
+    }
   }, [savedResult]);
+
+  const updatePart = (key, fields) =>
+    setPartResults(prev => ({ ...prev, [key]: { ...(prev[key] || {}), ...fields } }));
+
+  const guardarPartes = async () => {
+    if (!day) return;
+    const parts = getDayParts(day);
+    const partes = parts.map(p => {
+      const pr = partResults[p.key] || {};
+      let resultado;
+      if (p.isStrength) {
+        resultado = pr.resultado || '';
+      } else {
+        const tp = pr.minutos ? `${pr.minutos.padStart(2,'0')}:${(pr.segundos||'00').padStart(2,'0')}` : '';
+        const rp = pr.rondas ? `${pr.rondas}+${pr.repsExtra || '0'}` : '';
+        resultado = [rp, tp].filter(Boolean).join(' · ');
+      }
+      return { key: p.key, label: p.label, resultado, notas: pr.notas || '', rx: pr.rx !== false };
+    });
+    const summary = partes.map(p => `${p.label}: ${p.resultado || '—'}`).join(' · ');
+    await saveResultado(day.day, {
+      resultado: summary, notas: '', fecha: new Date().toISOString(),
+      rx: partes.every(p => p.rx), adaptacion, partes,
+    });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
 
   const guardar = async () => {
     if (!day) return;
@@ -407,7 +565,9 @@ export default function WodScreen({ navigate }) {
   };
 
   const today   = getToday();
-  const rmKey   = day?.rmKey || 'cj';
+  const LABEL_TO_RMKEY = { 'back squat': 'bs', 'front squat': 'fs', 'deadlift': 'dl', 'strict press': 'sp', 'push press': 'sp', 'snatch': 'sn', 'clean': 'cj' };
+  const inferredRmKey = day?.label ? (Object.entries(LABEL_TO_RMKEY).find(([k]) => day.label.toLowerCase().includes(k))?.[1] || null) : null;
+  const rmKey   = day?.rmKey || inferredRmKey || 'cj';
   const rmVal   = parseFloat(rms[rmKey]);
   const hasRM   = rmVal > 0;
 
@@ -424,7 +584,7 @@ export default function WodScreen({ navigate }) {
   if (!todayInProgram || !day) {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
-        <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16, paddingTop: 60 }}>
+        <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16 }}>
           <Text style={{ fontSize: t.fs(10), color: t.accent + '88', letterSpacing: 4, fontWeight: '700' }}>WOD DEL DÍA</Text>
           <Text style={{ fontSize: t.fs(28), fontWeight: '900', letterSpacing: 2, color: t.text, marginTop: 4 }}>HOY</Text>
           <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 4 }}>{formatDateShort(today)}</Text>
@@ -474,7 +634,7 @@ export default function WodScreen({ navigate }) {
         </ViewShot>
       </View>
 
-      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16, paddingTop: 60 }}>
+      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
           <View style={{ backgroundColor: t.accent, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 }}>
             <Text style={{ fontSize: t.fs(8), color: '#fff', fontWeight: '900', letterSpacing: 2 }}>HOY</Text>
@@ -495,6 +655,21 @@ export default function WodScreen({ navigate }) {
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 60 }}>
+
+        {/* CALENTAMIENTO */}
+        {day.warmup?.length > 0 && (
+          <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.accent + '30', borderRadius: 10, padding: 14, marginBottom: 10 }}>
+            <Text style={{ fontSize: t.fs(12), fontWeight: '700', letterSpacing: 2, color: t.accent, marginBottom: 12 }}>🔥 CALENTAMIENTO</Text>
+            {day.warmup.map((item, i) => (
+              <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent + '60', borderRadius: 8, padding: 10, marginBottom: 6 }}>
+                <View style={{ width: 22, height: 22, borderRadius: 4, backgroundColor: t.accent + '20', borderWidth: 1, borderColor: t.accent + '40', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
+                  <Text style={{ fontSize: t.fs(10), color: t.accent, fontWeight: '700' }}>{i + 1}</Text>
+                </View>
+                <Text style={{ flex: 1, fontSize: t.fs(13), color: t.text, lineHeight: t.fs(19) }}>{item}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* FUERZA */}
         {day.strength && (
@@ -661,7 +836,7 @@ export default function WodScreen({ navigate }) {
         )}
 
         {/* PROGRESIÓN */}
-        <ProgressStrip resultados={resultados} currentDayKey={day.day} t={t} />
+        <ProgressStrip resultados={resultados} currentDayKey={day.day} day={day} allDaysFlat={allDaysFlat} t={t} />
 
         {/* RESULTADO DE LA PAREJA */}
         {partnerProfile && partnerResultados[day.day] && (() => {
@@ -689,7 +864,51 @@ export default function WodScreen({ navigate }) {
           );
         })()}
 
-        {/* ANOTAR RESULTADO */}
+        {/* ANOTAR RESULTADOS — multi-bloque */}
+        {dayParts.length >= 2 && (
+          <View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <Text style={{ fontSize: t.fs(10), color: '#4caf50', letterSpacing: 2, fontWeight: '700' }}>✏️ ANOTAR RESULTADOS</Text>
+              {saved && <Text style={{ fontSize: t.fs(10), color: '#52b788', fontWeight: '700' }}>✓ GUARDADO</Text>}
+            </View>
+            {dayParts.map(part => (
+              <PartResultCard key={part.key} part={part} pr={partResults[part.key]} onChange={fields => updatePart(part.key, fields)} t={t} />
+            ))}
+            {(() => {
+              const filled = dayParts.filter(p => {
+                const pr = partResults[p.key] || {};
+                return p.isStrength ? !!pr.resultado : !!(pr.minutos || pr.rondas);
+              }).length;
+              return (
+                <>
+                  <TouchableOpacity onPress={guardarPartes}
+                    style={{ backgroundColor: '#2e6e32', borderRadius: 8, padding: 14, alignItems: 'center', marginBottom: savedResult ? 8 : 0 }}>
+                    <Text style={{ color: '#fff', fontWeight: '900', fontSize: t.fs(13), letterSpacing: 1 }}>
+                      💾 GUARDAR TODO{filled > 0 ? ` (${filled}/${dayParts.length})` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                  {savedResult && (
+                    <TouchableOpacity
+                      onPress={compartir}
+                      disabled={sharing}
+                      style={{ backgroundColor: t.dark ? '#0e1a10' : '#fff', borderWidth: 1.5, borderColor: '#2e6e32', borderRadius: 8, padding: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
+                      {sharing
+                        ? <ActivityIndicator size="small" color="#52b788" />
+                        : <Text style={{ fontSize: t.fs(16) }}>📤</Text>
+                      }
+                      <Text style={{ color: '#52b788', fontWeight: '900', fontSize: t.fs(13), letterSpacing: 1 }}>
+                        {sharing ? 'GENERANDO...' : 'COMPARTIR RESULTADO'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              );
+            })()}
+          </View>
+        )}
+
+        {/* ANOTAR RESULTADO — bloque único */}
+        {dayParts.length < 2 && (
         <View style={{ backgroundColor: t.dark ? '#06100a' : '#e8f5e9', borderWidth: 1, borderColor: t.dark ? '#2e6e3250' : '#c8e6c9', borderRadius: 10, padding: 14 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <Text style={{ fontSize: t.fs(10), color: '#4caf50', letterSpacing: 2, fontWeight: '700' }}>✏️ ANOTAR RESULTADO</Text>
@@ -774,6 +993,7 @@ export default function WodScreen({ navigate }) {
             </TouchableOpacity>
           )}
         </View>
+        )}
 
       </ScrollView>
     </View>

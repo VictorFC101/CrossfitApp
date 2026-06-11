@@ -2,6 +2,7 @@ import { View, Text, ScrollView, TouchableOpacity, TextInput, RefreshControl, Ac
 import { useState, useEffect } from 'react';
 import { useTheme } from '../ThemeContext';
 import { useSocial } from '../SocialContext';
+import { useProgram } from '../ProgramContext';
 import { supabase } from '../supabase';
 import { RM_NAMES } from '../constants';
 
@@ -22,7 +23,7 @@ function Avatar({ nombre, color, size = 40, t }) {
   );
 }
 
-function FeedItem({ item, t, TIPO_ICONS, TIPO_LABELS, getAmigoData, myUserId, onReaction, onComment, onDeleteComment, onDeleteFeedItem }) {
+function FeedItem({ item, t, TIPO_ICONS, TIPO_LABELS, getAmigoData, myUserId, onReaction, onComment, onDeleteComment, onDeleteFeedItem, allDays }) {
   const amigoData = getAmigoData(item);
   const isMe = item.user_id === myUserId;
   const accentColor = isMe ? t.accent : '#4895ef';
@@ -30,7 +31,8 @@ function FeedItem({ item, t, TIPO_ICONS, TIPO_LABELS, getAmigoData, myUserId, on
   const renderData = () => {
     const d = item.data || {};
     switch (item.tipo) {
-      case 'wod_completado':
+      case 'wod_completado': {
+        const dayData = allDays?.[d.dia];
         return (
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -45,8 +47,49 @@ function FeedItem({ item, t, TIPO_ICONS, TIPO_LABELS, getAmigoData, myUserId, on
             </View>
             {d.resultado && <Text style={{ fontSize: t.fs(22), fontWeight: '900', color: accentColor }}>{d.resultado}</Text>}
             {d.notas && <Text style={{ fontSize: t.fs(12), color: t.text2, marginTop: 4, lineHeight: t.fs(18) }}>{d.notas}</Text>}
+
+            {dayData?.strength && (
+              <View style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: t.border, paddingTop: 10 }}>
+                <Text style={{ fontSize: t.fs(9), color: accentColor, letterSpacing: 2, fontWeight: '700', marginBottom: 5 }}>💪 FUERZA</Text>
+                <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: t.text, marginBottom: 5 }}>{dayData.strength.name}</Text>
+                {dayData.strength.sets?.map((s, i) => (
+                  <Text key={i} style={{ fontSize: t.fs(11), color: t.text2, marginBottom: 2 }}>{i + 1}. {s.desc}</Text>
+                ))}
+              </View>
+            )}
+            {dayData?.wod && (dayData.wod.movements?.length > 0 || dayData.wod.parts?.length > 0 || dayData.wod.emomMinutes) && (
+              <View style={{ marginTop: dayData?.strength ? 8 : 10, borderTopWidth: dayData?.strength ? 0 : 1, borderTopColor: t.border, paddingTop: dayData?.strength ? 0 : 10 }}>
+                <Text style={{ fontSize: t.fs(9), color: accentColor, letterSpacing: 2, fontWeight: '700', marginBottom: 5 }}>
+                  ⚡ WOD{!dayData.wod.parts && dayData.wod.type ? ` · ${dayData.wod.type}${dayData.wod.duration ? ` ${dayData.wod.duration}` : ''}` : ''}
+                </Text>
+                {dayData.wod.parts?.length > 0
+                  ? dayData.wod.parts.map((part, pi) => (
+                      <View key={pi} style={{ marginBottom: 6 }}>
+                        <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: accentColor, marginBottom: 3 }}>
+                          {part.label || `WOD ${pi + 1}`}{part.type ? ` · ${part.type}` : ''}{part.duration ? ` · ${part.duration}` : ''}
+                        </Text>
+                        {part.movements?.filter(m => m.name !== '—').map((m, j) => (
+                          <Text key={j} style={{ fontSize: t.fs(11), color: t.text2, marginBottom: 2 }}>
+                            {m.reps} {m.name}{m.weight && m.weight !== 'BW' ? ` · ${m.weight}` : ''}
+                          </Text>
+                        ))}
+                      </View>
+                    ))
+                  : dayData.wod.emomMinutes
+                  ? dayData.wod.emomMinutes.map((min, j) => (
+                      <Text key={j} style={{ fontSize: t.fs(11), color: t.text2, marginBottom: 2 }}>{min.min}: {min.work}</Text>
+                    ))
+                  : dayData.wod.movements?.filter(m => m.name !== '—').map((m, j) => (
+                      <Text key={j} style={{ fontSize: t.fs(11), color: t.text2, marginBottom: 2 }}>
+                        {m.reps} {m.name}{m.weight && m.weight !== 'BW' ? ` · ${m.weight}` : ''}
+                      </Text>
+                    ))
+                }
+              </View>
+            )}
           </View>
         );
+      }
       case 'rm_nuevo': {
         return (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -182,7 +225,8 @@ function FriendsTab({ t }) {
         .from('usuarios_publicos')
         .select('*')
         .eq('box_id', myProfile.box_id)
-        .neq('id', user.id);
+        .neq('id', user.id)
+        .limit(100);
       setSearchResults(data || []);
     } catch (e) {}
     finally { setSearching(false); }
@@ -350,6 +394,8 @@ function FriendsTab({ t }) {
 export default function SocialScreen() {
   const t = useTheme();
   const social = useSocial();
+  const { activeProgram } = useProgram();
+  const allDays = activeProgram?.weeks?.flatMap(w => w.days).reduce((acc, d) => { acc[d.day] = d; return acc; }, {}) || {};
   const [tab, setTab] = useState('feed');
   const [refreshing, setRefreshing] = useState(false);
   const [commentTarget, setCommentTarget] = useState(null);
@@ -432,7 +478,7 @@ export default function SocialScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       {/* HEADER */}
-      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16, paddingTop: 60 }}>
+      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16 }}>
         <Text style={{ fontSize: t.fs(9), color: t.accent + '88', letterSpacing: 4, fontWeight: '700' }}>COMUNIDAD</Text>
         <Text style={{ fontSize: t.fs(28), fontWeight: '900', color: t.text, marginTop: 2 }}>SOCIAL</Text>
       </View>
@@ -500,6 +546,7 @@ export default function SocialScreen() {
                   onComment={setCommentTarget}
                   onDeleteComment={handleDeleteComment}
                   onDeleteFeedItem={deleteFeedItem}
+                  allDays={allDays}
                 />
               ))
             )}

@@ -187,7 +187,7 @@ export default function HomeScreen({ navigate }) {
       supabase.from('asignaciones')
         .select('id')
         .eq('user_id', user.id)
-        .eq('status', 'activo')
+        .in('status', ['activo', 'pendiente'])
         .limit(1)
         .then(({ data }) => setHasActiveAsignacion(!!(data && data.length > 0)));
     });
@@ -371,7 +371,7 @@ export default function HomeScreen({ navigate }) {
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       {/* HEADER */}
-      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 12, paddingTop: 54 }}>
+      <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 12 }}>
         <Text style={{ fontSize: t.fs(8), color: t.accent + '88', letterSpacing: 3, fontWeight: '700' }}>PROGRAMA · EN PAREJA</Text>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
           <Text style={{ fontSize: t.fs(20), fontWeight: '900', color: t.text, letterSpacing: 1, flex: 1 }}>{programTitle}</Text>
