@@ -69,7 +69,7 @@ export const mayo2026 = {
           type: "Endurance",
           label: "BACK SQUAT + ENDURANCE",
           trainType: "Endurance Pesado",
-          rmKey: null,
+          rmKey: "bs",
           warmup: [
             "2 rondas: 10 goblet squat (KB 16kg) + 10 hip hinge con banda + 10 wall walk lento",
             "Movilidad de tobillo y cadera — foam roller cuádriceps 2 min/lado",
@@ -238,7 +238,7 @@ export const mayo2026 = {
           type: "Endurance",
           label: "DEADLIFT + ENDURANCE",
           trainType: "Endurance Pesado",
-          rmKey: null,
+          rmKey: "dl",
           warmup: [
             "2 rondas: 10 Romanian DL con barra vacía + 10 hip hinge con banda + 10 inchworm",
             "Activación de glúteos: 2x15 hip thrust barra vacía + movilidad de cadera",
@@ -409,7 +409,7 @@ export const mayo2026 = {
           type: "Endurance",
           label: "FRONT SQUAT + ENDURANCE",
           trainType: "Endurance Pesado",
-          rmKey: null,
+          rmKey: "fs",
           warmup: [
             "2 rondas: 10 goblet squat (KB 24kg) + 10 strict press barra vacía + 10 shoulder tap plancha",
             "Front squat progresivo: barra vacía x8, 40% x5, 55% x3",
@@ -583,7 +583,7 @@ export const mayo2026 = {
           type: "Endurance",
           label: "STRICT PRESS + ENDURANCE",
           trainType: "Endurance Pesado",
-          rmKey: null,
+          rmKey: "sp",
           warmup: [
             "2 rondas: 10 band pull-apart + 10 face pull con banda + 10 scap push-up",
             "Strict press progresivo: barra vacía x8, 40% x5, 55% x3",
