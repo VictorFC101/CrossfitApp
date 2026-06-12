@@ -6,6 +6,34 @@ import { useApp } from '../AppContext';
 import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { getTodayDay, isTodayInProgram, formatDateShort, getToday } from '../dateUtils';
+import { RM_CATEGORIES } from '../constants';
+
+// Mapa rmKey → nombre corto del movimiento (para mostrar "Limita: X" en complejos)
+const RM_KEY_NAMES = Object.values(RM_CATEGORIES)
+  .flatMap(cat => cat.movements)
+  .reduce((acc, m) => { acc[m.key] = m.name; return acc; }, {});
+
+// Calcula el RM efectivo de un día de fuerza, teniendo en cuenta movimientos
+// "complejo" (rmKeys: [k1, k2]) → se usa el RM más bajo de los dos disponibles.
+function getEffectiveRM(day, rms) {
+  if (Array.isArray(day?.rmKeys) && day.rmKeys.length === 2) {
+    const [k1, k2] = day.rmKeys;
+    const v1 = parseFloat(rms[k1]);
+    const v2 = parseFloat(rms[k2]);
+    const has1 = v1 > 0;
+    const has2 = v2 > 0;
+    if (has1 && has2) {
+      const limitKey = v1 <= v2 ? k1 : k2;
+      return { rmKey: limitKey, rmVal: Math.min(v1, v2), hasRM: true, isComplex: true, limitName: RM_KEY_NAMES[limitKey] };
+    }
+    if (has1) return { rmKey: k1, rmVal: v1, hasRM: true, isComplex: true, limitName: RM_KEY_NAMES[k1] };
+    if (has2) return { rmKey: k2, rmVal: v2, hasRM: true, isComplex: true, limitName: RM_KEY_NAMES[k2] };
+    return { rmKey: k1, rmVal: NaN, hasRM: false, isComplex: true, limitName: null };
+  }
+  const k = day?.rmKey || 'cj';
+  const v = parseFloat(rms[k]);
+  return { rmKey: k, rmVal: v, hasRM: v > 0, isComplex: false, limitName: null };
+}
 
 const MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
@@ -567,9 +595,8 @@ export default function WodScreen({ navigate }) {
   const today   = getToday();
   const LABEL_TO_RMKEY = { 'back squat': 'bs', 'front squat': 'fs', 'deadlift': 'dl', 'strict press': 'sp', 'push press': 'sp', 'snatch': 'sn', 'clean': 'cj' };
   const inferredRmKey = day?.label ? (Object.entries(LABEL_TO_RMKEY).find(([k]) => day.label.toLowerCase().includes(k))?.[1] || null) : null;
-  const rmKey   = day?.rmKey || inferredRmKey || 'cj';
-  const rmVal   = parseFloat(rms[rmKey]);
-  const hasRM   = rmVal > 0;
+  const effectiveDay = day ? { ...day, rmKey: day.rmKey || inferredRmKey || 'cj' } : day;
+  const { rmKey, rmVal, hasRM, isComplex, limitName } = getEffectiveRM(effectiveDay, rms);
 
   const timePart_   = minutos ? `${minutos.padStart(2,'0')}:${(segundos||'00').padStart(2,'0')}` : '';
   const roundsPart_ = rondas  ? `${rondas}+${repsExtra || '0'}` : '';
@@ -676,21 +703,33 @@ export default function WodScreen({ navigate }) {
           <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.accent + '30', borderRadius: 10, padding: 14, marginBottom: 10 }}>
             <Text style={{ fontSize: t.fs(12), fontWeight: '700', letterSpacing: 2, color: t.accent, marginBottom: 12 }}>💪 FUERZA / TÉCNICA</Text>
             <View style={{ backgroundColor: t.accent + '10', borderWidth: 1, borderColor: t.accent + '25', borderRadius: 8, padding: 12, marginBottom: 12 }}>
-              <Text style={{ fontSize: t.fs(10), color: t.accent, letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>TU {day.label} 1RM</Text>
+              <Text style={{ fontSize: t.fs(10), color: t.accent, letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>
+                {isComplex && limitName ? `TU ${limitName} 1RM` : `TU ${day.label} 1RM`}
+              </Text>
               {hasRM ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <Text style={{ fontSize: t.fs(28), fontWeight: '900', color: t.accent }}>
-                    {rms[rmKey]}<Text style={{ fontSize: t.fs(14), color: t.text2 }}> kg</Text>
+                    {rmVal}<Text style={{ fontSize: t.fs(14), color: t.text2 }}> kg</Text>
                   </Text>
                   <Text style={{ fontSize: t.fs(11), color: t.text2, flex: 1 }}>
                     {`65%→${Math.round(rmVal * 0.65)}kg  ·  72%→${Math.round(rmVal * 0.72)}kg  ·  78%→${Math.round(rmVal * 0.78)}kg`}
                   </Text>
                 </View>
+              ) : isComplex ? (
+                <TouchableOpacity onPress={() => navigate('RM')}
+                  style={{ backgroundColor: t.accent + '15', borderWidth: 1, borderColor: t.accent + '30', borderRadius: 8, padding: 10, alignItems: 'center' }}>
+                  <Text style={{ fontSize: t.fs(12), color: t.accent, fontWeight: '700' }}>+ Añadir tus 1RM de {day.label.split('+').map(s => s.trim()).join(' y ')} →</Text>
+                </TouchableOpacity>
               ) : (
                 <TouchableOpacity onPress={() => navigate('RM')}
                   style={{ backgroundColor: t.accent + '15', borderWidth: 1, borderColor: t.accent + '30', borderRadius: 8, padding: 10, alignItems: 'center' }}>
                   <Text style={{ fontSize: t.fs(12), color: t.accent, fontWeight: '700' }}>+ Añadir tu 1RM →</Text>
                 </TouchableOpacity>
+              )}
+              {isComplex && hasRM && (
+                <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: 6, fontStyle: 'italic' }}>
+                  Complejo: el % se calcula sobre el RM más bajo de los dos movimientos ({limitName}).
+                </Text>
               )}
             </View>
             {day.strength.sets.map((s, i) => {

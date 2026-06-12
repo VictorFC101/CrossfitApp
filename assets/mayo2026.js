@@ -22,6 +22,7 @@ export const mayo2026 = {
           label: "POWER CLEAN + PUSH PRESS",
           trainType: "CrossFit Largo",
           rmKey: "cj",
+          rmKeys: ["pc", "pp"],
           warmup: [
             "2 rondas: 500m remo suave + 10 dislocaciones de hombro + 10 goblet squat (KB 16kg)",
             "Movilidad de cadera y tobillo con banda — 90 seg/lado",
@@ -190,6 +191,7 @@ export const mayo2026 = {
           label: "SQUAT CLEAN + PUSH JERK",
           trainType: "CrossFit Largo",
           rmKey: "cj",
+          rmKeys: ["clean", "pj"],
           warmup: [
             "500m remo + 10 hang power clean barra vacía + 10 front squat barra vacía",
             "Movilidad de muñeca y codo — 2 min + activación de tríceps con banda",
@@ -290,6 +292,7 @@ export const mayo2026 = {
           label: "HANG POWER SNATCH + OHS",
           trainType: "CrossFit Largo",
           rmKey: "sn",
+          rmKeys: ["hps", "ohs"],
           warmup: [
             "Foam roller en torácica — 2 min + shoulder opener con banda 60 seg/lado",
             "OHS con PVC 3 x 10 buscando profundidad máxima",

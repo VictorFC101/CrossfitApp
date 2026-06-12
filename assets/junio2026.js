@@ -192,6 +192,7 @@ export const junio2026 = {
           label: "SQUAT CLEAN + PUSH PRESS",
           trainType: "CrossFit Largo",
           rmKey: "cj",
+          rmKeys: ["clean", "pp"],
           warmup: [
             "3 min: 3 rondas — 5 air squat + 5 hang power clean barra vacía + 5 push press barra vacía",
             "2 min: Movilidad de cadera y tobillo — pigeon stretch 45 seg/lado + ankle circles x10",
@@ -308,6 +309,7 @@ export const junio2026 = {
           label: "HANG POWER SNATCH + OHS",
           trainType: "CrossFit Largo",
           rmKey: "sn",
+          rmKeys: ["hps", "ohs"],
           warmup: [
             "3 min: PVC pass-through x10 + OHS con PVC x8 + hang power snatch con PVC x5",
             "2 min: Movilidad overhead — band shoulder stretch 45 seg/lado + wrist extension en suelo 30 seg",
@@ -532,6 +534,7 @@ export const junio2026 = {
           label: "PUSH PRESS + PUSH JERK",
           trainType: "CrossFit Largo",
           rmKey: "sp",
+          rmKeys: ["pp", "pj"],
           warmup: [
             "3 min: 2 rondas — 10 band pull-apart + 8 push press barra vacía + 6 push jerk barra vacía",
             "2 min: Movilidad de hombro — arm circles x10/lado + band overhead stretch 40 seg/lado",
