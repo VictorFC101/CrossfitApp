@@ -714,8 +714,12 @@ export default function WodScreen({ navigate }) {
                 </Text>
               )}
             </View>
-            {day.strength.sets.map((s, i) => {
-              const p = s.desc.match(/(\d+)%/)?.[1];
+            {(day.strength.sets || []).map((s, i) => {
+              const p = s.desc?.match(/(\d+)%/)?.[1];
+              // RM propio de la serie (bloques de otro movimiento); si no lo tiene, el del día
+              const setRm = parseFloat(rms[s.rmKey]);
+              const setHasRM = setRm > 0 ? true : hasRM;
+              const setRmVal = setRm > 0 ? setRm : rmVal;
               return (
                 <View key={i} style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 10, marginBottom: 8 }}>
                   <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -724,7 +728,7 @@ export default function WodScreen({ navigate }) {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>
-                        {s.desc}{hasRM && p ? ` → ${Math.round(rmVal * parseInt(p) / 100)}kg` : ''}
+                        {s.desc}{setHasRM && p ? ` → ${Math.round(setRmVal * parseInt(p) / 100)}kg` : ''}
                       </Text>
                       {s.note && <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 3 }}>{s.note}</Text>}
                       {p && (

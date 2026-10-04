@@ -57,14 +57,27 @@ export function inferRmKeysFromText(text) {
   return [found[0].key, found[1].key];
 }
 
+// Busca UN movimiento en un texto libre (título de bloque) y devuelve su rmKey,
+// o null si no se reconoce ninguno. Usa el orden de RM_NAME_PATTERNS (más
+// específicos primero), así "Clean & Jerk" no se confunde con "clean".
+export function inferRmKeyFromText(text) {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  for (const [pattern, key] of RM_NAME_PATTERNS) {
+    if (pattern.test(lower)) return key;
+  }
+  return null;
+}
+
 // Calcula el RM efectivo de un día de fuerza, teniendo en cuenta movimientos
 // "complejo" (rmKeys: [k1, k2]) → se usa el RM más bajo de los dos disponibles.
 // Si el día no trae `rmKeys` explícito (p.ej. programas subidos por JSON),
 // se intenta inferir a partir del texto de `strength.title` o `label`.
 export function getEffectiveRM(day, rms) {
+  // rmKeys === null (explícito) = día de un solo movimiento: no inferir complejo del texto
   const rmKeys = (Array.isArray(day?.rmKeys) && day.rmKeys.length === 2)
     ? day.rmKeys
-    : (inferRmKeysFromText(day?.strength?.title) || inferRmKeysFromText(day?.label));
+    : day?.rmKeys === null ? null : (inferRmKeysFromText(day?.strength?.title) || inferRmKeysFromText(day?.label));
   if (Array.isArray(rmKeys) && rmKeys.length === 2) {
     const [k1, k2] = rmKeys;
     const v1 = parseFloat(rms[k1]);

@@ -556,8 +556,8 @@ export default function HomeScreen({ navigate }) {
 
                 {day.strength && (
                   <Section title={`💪 FUERZA — ${day.strength.title}`} accent={t.accent} defaultOpen={true}>
-                    {day.strength.sets.map((s, i) => {
-                      const p = s.desc.match(/(\d+)%/)?.[1];
+                    {(day.strength.sets || []).map((s, i) => {
+                      const p = s.desc?.match(/(\d+)%/)?.[1];
                       return (
                         <View key={i} style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 10, marginBottom: 7 }}>
                           <View style={{ flexDirection: 'row', gap: 8 }}>

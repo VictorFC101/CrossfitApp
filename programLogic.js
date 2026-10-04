@@ -1,5 +1,6 @@
 // Lógica pura extraída de ProgramContext.js — sin dependencias de React/RN.
 import { parseDateFromDay } from './dateUtils';
+import { inferRmKeyFromText, inferRmKeysFromText } from './wodLogic';
 
 // Obtener fecha de inicio y fin de un programa
 export function getProgramDateRange(program) {
@@ -48,8 +49,55 @@ export function getActiveProgram(programs) {
   return bestFuture || programs[0];
 }
 
+// Separador entre el título del bloque y la descripción de cada serie
+const BLOCK_TITLE_SEP = ' · ';
+
+// Formato nuevo de fuerza: strength.blocks[{title,note,rest,sets}] sin strength.sets.
+// Aplana los bloques a strength.sets (formato que esperan las pantallas), conservando
+// blocks. Con más de un bloque, antepone el título a cada serie. strength.title vacío
+// pasa a ser el título del PRIMER bloque (no se unen títulos: evitaría falsos complejos).
+// El RM del día sale del primer bloque si el día no trae rmKey/rmKeys: complejo real
+// (2 movimientos) -> rmKeys; un movimiento -> rmKey + rmKeys:null (para que el label
+// "BACK SQUAT + SNATCH" no se interprete como complejo). Cada serie lleva el rmKey de
+// su bloque si se reconoce (s.rmKey). Idempotente: si ya hay sets devuelve el mismo día.
+export function normalizeStrength(day) {
+  const st = day?.strength;
+  if (!st || Array.isArray(st.sets) || !Array.isArray(st.blocks) || !st.blocks.length) return day;
+  const multi = st.blocks.length > 1;
+  const sets = st.blocks.flatMap(b => {
+    // en un bloque complejo (2 movimientos) la serie usa el RM del día (min de ambos)
+    const rmKey = inferRmKeysFromText(b?.title) ? null : inferRmKeyFromText(b?.title);
+    return (Array.isArray(b?.sets) ? b.sets : []).map(s => ({
+      ...s,
+      desc: multi && b.title ? `${b.title}${BLOCK_TITLE_SEP}${s?.desc || ''}` : (s?.desc || ''),
+      ...(rmKey ? { rmKey } : {}),
+    }));
+  });
+  const firstTitle = st.blocks[0]?.title || '';
+  const out = { ...day, strength: { ...st, title: st.title || firstTitle, sets } };
+  if (!day.rmKey && !day.rmKeys) {
+    const pair = inferRmKeysFromText(firstTitle);
+    const single = pair ? null : inferRmKeyFromText(firstTitle);
+    if (pair) out.rmKeys = pair;
+    else if (single) { out.rmKey = single; out.rmKeys = null; }
+  }
+  return out;
+}
+
+// Normaliza todos los días de un programa (devuelve un programa nuevo)
+export function normalizeProgramDays(program) {
+  if (!Array.isArray(program?.weeks)) return program;
+  return {
+    ...program,
+    weeks: program.weeks.map(w => (
+      Array.isArray(w?.days) ? { ...w, days: w.days.map(normalizeStrength) } : w
+    )),
+  };
+}
+
 // Enriquecer programa con metadata calculada
-export function enrichProgram(program) {
+export function enrichProgram(rawProgram) {
+  const program = normalizeProgramDays(rawProgram);
   const { start, end } = getProgramDateRange(program);
   const MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const today = new Date();
