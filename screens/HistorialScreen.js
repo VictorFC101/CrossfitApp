@@ -8,6 +8,8 @@ import { MOVEMENTS_DB, CATEGORIES, CATEGORY_COLORS } from '../movements_db';
 import { RM_NAMES, TYPE_COLORS as SHARED_TYPE_COLORS } from '../constants';
 import { parseDateFromDay } from '../dateUtils';
 import { parsePercent } from '../wodLogic';
+import { useShareResult } from '../hooks/useShareResult';
+import { fromProgramDay, fromWodLibre } from '../shareResultLogic';
 
 const rmNames = RM_NAMES;
 
@@ -31,6 +33,7 @@ function getDayParts(day) {
 
 function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
   const t = useTheme();
+  const { share, sharing, ShareHost } = useShareResult({ acento: t.accent });
   const dayParts = getDayParts(day);
   const isMulti = dayParts.length >= 2;
 
@@ -303,7 +306,16 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
             style={{ backgroundColor: '#2e6e32', borderRadius: 10, padding: 16, alignItems: 'center', marginTop: 12 }}>
             <Text style={{ color: '#fff', fontWeight: '900', fontSize: t.fs(14), letterSpacing: 1 }}>💾 GUARDAR CAMBIOS</Text>
           </TouchableOpacity>
+          {savedResult?.resultado ? (
+            <TouchableOpacity onPress={() => share(fromProgramDay(day, savedResult))} disabled={sharing}
+              style={{ borderWidth: 1.5, borderColor: '#2e6e32', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 10, opacity: sharing ? 0.6 : 1 }}>
+              <Text style={{ color: '#52b788', fontWeight: '900', fontSize: t.fs(13), letterSpacing: 1 }}>
+                {sharing ? 'GENERANDO...' : '📤 COMPARTIR RESULTADO GUARDADO'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </ScrollView>
+        <ShareHost />
       </View>
     </Modal>
   );
@@ -579,6 +591,7 @@ export default function HistorialScreen() {
   const t = useTheme();
   const { activeProgram, programs } = useProgram();
   const { feed, esAmigo } = useSocial();
+  const { share, sharing, ShareHost } = useShareResult({ acento: t.accent });
   const [expanded, setExpanded] = useState(null);
   const [tab, setTab] = useState('yo');
   const [showCreator, setShowCreator] = useState(false);
@@ -647,6 +660,7 @@ export default function HistorialScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
+      <ShareHost />
       <WodCreator visible={showCreator} onClose={() => setShowCreator(false)} onSave={handleSaveWodLibre} />
       <EditResultModal
         visible={!!editingDay}
@@ -780,11 +794,21 @@ export default function HistorialScreen() {
                       <View style={{ backgroundColor: accent + '10', borderRadius: 8, padding: 12, marginBottom: 12 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                           <Text style={{ fontSize: t.fs(10), color: accent, letterSpacing: 2, fontWeight: '700' }}>📊 RESULTADO</Text>
-                          <TouchableOpacity
-                            onPress={() => { setExpanded(null); setEditingDay(day); }}
-                            style={{ backgroundColor: accent, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 }}>
-                            <Text style={{ fontSize: t.fs(9), fontWeight: '900', color: '#fff' }}>✏️ EDITAR</Text>
-                          </TouchableOpacity>
+                          <View style={{ flexDirection: 'row', gap: 6 }}>
+                            {res.resultado ? (
+                              <TouchableOpacity
+                                onPress={() => share(fromProgramDay(day, res))}
+                                disabled={sharing}
+                                style={{ backgroundColor: accent, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, opacity: sharing ? 0.6 : 1 }}>
+                                <Text style={{ fontSize: t.fs(9), fontWeight: '900', color: '#fff' }}>{sharing ? 'GENERANDO...' : 'COMPARTIR'}</Text>
+                              </TouchableOpacity>
+                            ) : null}
+                            <TouchableOpacity
+                              onPress={() => { setExpanded(null); setEditingDay(day); }}
+                              style={{ backgroundColor: accent, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 }}>
+                              <Text style={{ fontSize: t.fs(9), fontWeight: '900', color: '#fff' }}>✏️ EDITAR</Text>
+                            </TouchableOpacity>
+                          </View>
                         </View>
                         <Text style={{ fontSize: t.fs(24), fontWeight: '900', color: accent }}>{res.resultado || 'No registrado'}</Text>
                         {res.fecha && (
@@ -1005,7 +1029,15 @@ export default function HistorialScreen() {
                       <View style={{ borderTopWidth: 1, borderTopColor: t.border, padding: 14 }}>
                         {wod.resultado ? (
                           <View style={{ backgroundColor: t.accent + '10', borderRadius: 8, padding: 12, marginBottom: 12 }}>
-                            <Text style={{ fontSize: t.fs(10), color: t.accent, letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>📊 RESULTADO</Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                              <Text style={{ fontSize: t.fs(10), color: t.accent, letterSpacing: 2, fontWeight: '700' }}>📊 RESULTADO</Text>
+                              <TouchableOpacity
+                                onPress={() => share(fromWodLibre(wod))}
+                                disabled={sharing}
+                                style={{ backgroundColor: t.accent, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, opacity: sharing ? 0.6 : 1 }}>
+                                <Text style={{ fontSize: t.fs(9), fontWeight: '900', color: '#fff' }}>{sharing ? 'GENERANDO...' : 'COMPARTIR'}</Text>
+                              </TouchableOpacity>
+                            </View>
                             <Text style={{ fontSize: t.fs(24), fontWeight: '900', color: t.accent }}>{wod.resultado}</Text>
                           </View>
                         ) : null}
