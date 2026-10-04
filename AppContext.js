@@ -105,6 +105,11 @@ export function AppProvider({ children }) {
           if (uid) supabase.from('usuarios').update({ onboarding_completed: true }).eq('id', uid).then(() => {});
         }
       }
+      // Supabase es la fuente de verdad: en un dispositivo nuevo no existe el flag local
+      if (onboardingDone) {
+        setOnboardingCompleted(true);
+        AsyncStorage.setItem('@crossfit_onboarding_done', '1').catch(() => {});
+      }
       if (data) {
         const profile = { ...data, ...(privateData || {}), onboarding_completed: onboardingDone };
         setUserProfile(profile);

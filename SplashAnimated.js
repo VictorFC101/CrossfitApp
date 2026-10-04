@@ -5,8 +5,11 @@ const { width } = Dimensions.get('window');
 const LOGO_W = width * 0.68;
 
 // Dimensiones reales de cada PNG
-const wSrc    = Image.resolveAssetSource(require('./assets/logo-w.png'));
-const textSrc = Image.resolveAssetSource(require('./assets/logo-text.png'));
+// En web Image.resolveAssetSource no existe → se usan las medidas fijas del PNG
+const resolveSize = (mod, fallback) =>
+  (typeof Image.resolveAssetSource === 'function' && Image.resolveAssetSource(mod)) || fallback;
+const wSrc    = resolveSize(require('./assets/logo-w.png'), { width: 605, height: 276 });
+const textSrc = resolveSize(require('./assets/logo-text.png'), { width: 605, height: 102 });
 const W_H     = LOGO_W * (wSrc.height / wSrc.width);
 const TEXT_H  = LOGO_W * (textSrc.height / textSrc.width);
 const TOTAL_H = W_H + TEXT_H;
