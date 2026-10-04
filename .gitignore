@@ -44,3 +44,21 @@ yarn-error.*
 graphify-out/
 
 .claude/settings.local.json
+
+# Ficheros de trabajo locales
+build_june_final.js
+existing_june3*.json
+june_final.json
+upload_june_final.html
+generate-assets.js
+/npm
+replica/
+tsconfig.json
+AGENTS.md
+
+# Secretos
+.env
+
+# Carpetas de herramientas
+.claude/worktrees/
+.codex/
