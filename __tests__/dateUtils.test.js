@@ -21,6 +21,25 @@ describe('dateUtils', () => {
   });
 
   describe('parseDateFromDay', () => {
+    it.each([
+      ['Lunes 25 May', 4, 25],
+      ['Martes 26 May', 4, 26],
+      ['Miércoles 27 May', 4, 27],
+      ['Jueves 28 May', 4, 28],
+      ['Viernes 29 May', 4, 29],
+      ['Sábado 30 May', 4, 30],
+      ['Domingo 31 May', 4, 31],
+      ['Martes 2 Jun', 5, 2],
+      ['Mar 2 Jun', 5, 2],
+      ['Lunes 30 Mar', 2, 30],
+      ['Mar 31 Mar', 2, 31],
+    ])('el nombre del día no se confunde con el mes: %s', (str, month, day) => {
+      const d = parseDateFromDay(str);
+      expect(d).not.toBeNull();
+      expect(d.getMonth()).toBe(month);
+      expect(d.getDate()).toBe(day);
+    });
+
     it('parsea un día válido con número y mes', () => {
       const d = parseDateFromDay('Lunes 4 Mayo');
       expect(d).not.toBeNull();

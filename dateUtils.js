@@ -15,17 +15,25 @@ function extractFromDayStr(dayStr) {
   const parts = dayStr.trim().split(' ');
   let dayNum = null;
   let monthIdx = null;
+  // Mes encontrado antes del número: puede ser el día de la semana
+  // ("Martes"/"Mar" = martes, no marzo), así que solo se usa como último recurso
+  let monthBeforeDay = null;
 
   for (const part of parts) {
     const n = parseInt(part);
     if (!isNaN(n) && n >= 1 && n <= 31 && dayNum === null) {
       dayNum = n;
+      continue;
     }
     const key = part.substring(0, 3);
-    if (MONTH_MAP[key] !== undefined && monthIdx === null) {
+    if (MONTH_MAP[key] === undefined) continue;
+    if (dayNum === null) {
+      if (monthBeforeDay === null) monthBeforeDay = MONTH_MAP[key];
+    } else if (monthIdx === null) {
       monthIdx = MONTH_MAP[key];
     }
   }
+  if (monthIdx === null) monthIdx = monthBeforeDay;
 
   if (dayNum === null || monthIdx === null) return null;
   return { dayNum, monthIdx };
