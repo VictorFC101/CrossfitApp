@@ -31,6 +31,48 @@ Cuando el usuario describa una tarea o bug, sigue siempre este orden:
 - Timer Screen: sección "WOD HOY" con datos hardcodeados → conectar al programa activo
 - WodScreen: revisar mismo anti-patrón de inicialización que tenía HomeScreen
 
+## Orquestación y eficiencia de tokens
+
+You are the **orchestrator**. Plan, delegate, and check work. Do not do the work yourself.
+
+### Rules for the main model
+- Do not read many files, run long searches or write large edits in the main context. Delegate them with the Agent tool.
+- Do these yourself only: break the task into steps, choose an agent and model for each step, write short prompts for them, check their results, and talk to the user.
+- Exception: a tiny task (one quick read, a one-line edit, or a single command) costs less done directly than through a subagent. Do it inline.
+
+### Pick a model for each subtask
+Before starting each subtask, rate how hard it is and pick the cheapest model that can do it well:
+
+| Complexity | Model | Typical tasks |
+|---|---|---|
+| Low (mechanical, clear output) | **haiku** | Finding files and symbols, `graphify query`, reading or summarizing code, running commands (lint, `graphify update`, `eas update`), renaming, small copy or UI text changes |
+| Medium (one feature, known pattern) | **sonnet** | Building a planned change, normal bug fixes, QA diagnosis, writing tests, changes spread over a few files |
+| High (ambiguous, cross-cutting, risky) | **opus** | Architecture plans (ARQUITECTO role), Supabase schema or RLS changes, provider and state refactors, bugs that a sonnet attempt could not fix |
+
+Start at the lowest tier that fits. Move up a tier only when a cheaper agent fails or reports low confidence.
+
+### Map onto the team workflow
+- ARQUITECTO: one **haiku** Explore agent gathers context (graphify first). Then **sonnet**, or **opus** if the change is cross-cutting, writes the plan. Wait for approval.
+- DESARROLLADOR: **sonnet** for each approved change. Run independent subtasks in parallel.
+- QA: **sonnet** finds the root cause. Use **opus** only if sonnet can't find it.
+
+### Subagent prompts
+- Each prompt must stand on its own: the goal, exact file paths, the critical rules from this file that apply, and what "done" means.
+- Ask for **short reports**: changed files, a brief summary, and open problems. No file dumps.
+- Pass what you already know into the prompt so the subagent doesn't search for it again.
+
+### Context gathering for subagents (graphify first)
+- Never explore by reading whole files or broad grep. Find code with the graphify CLI via Bash:
+  `graphify query "<question>"`, `graphify path "<A>" "<B>"`, `graphify explain "<concept>"`.
+  Do NOT invoke the /graphify skill inside subagents. Use the CLI only.
+- After locating the code, Read only the needed line ranges (offset/limit), never full files.
+- Fall back to Grep only if graphify returns nothing relevant.
+- The orchestrator runs the graphify query once and includes its result in the subagent prompt when several agents share the same context.
+- Any subagent that modifies code must run `graphify update .` before reporting, so the next agent queries a current graph.
+
+### After each task
+Report in one line per subtask which model you used and why.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
