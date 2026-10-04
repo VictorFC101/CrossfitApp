@@ -10,7 +10,7 @@ import { useProgram } from '../ProgramContext';
 import { getTodayDay, isTodayInProgram, formatDateShort, getToday } from '../dateUtils';
 import { useToday } from '../hooks/useToday';
 import { RM_CATEGORIES } from '../constants';
-import { RM_KEY_NAMES, RM_NAME_PATTERNS, inferRmKeysFromText, getEffectiveRM } from '../wodLogic';
+import { RM_KEY_NAMES, RM_NAME_PATTERNS, inferRmKeysFromText, getEffectiveRM, parsePercent } from '../wodLogic';
 
 const MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
@@ -715,7 +715,7 @@ export default function WodScreen({ navigate }) {
               )}
             </View>
             {(day.strength.sets || []).map((s, i) => {
-              const p = s.desc?.match(/(\d+)%/)?.[1];
+              const p = parsePercent(s.desc);
               // RM propio de la serie (bloques de otro movimiento); si no lo tiene, el del día
               const setRm = parseFloat(rms[s.rmKey]);
               const setHasRM = setRm > 0 ? true : hasRM;
@@ -728,7 +728,7 @@ export default function WodScreen({ navigate }) {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>
-                        {s.desc}{setHasRM && p ? ` → ${Math.round(setRmVal * parseInt(p) / 100)}kg` : ''}
+                        {s.desc}{setHasRM && p ? ` → ${Math.round(setRmVal * p / 100)}kg` : ''}
                       </Text>
                       {s.note && <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 3 }}>{s.note}</Text>}
                       {p && (

@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CACHE_KEYS } from '../constants';
 import { parseDateFromDay, isToday, isPast, getInitialIdx, isTodayInProgram, getToday, assignDatesFromStart, daySyncKey } from '../dateUtils';
 import { useToday } from '../hooks/useToday';
+import { parsePercent } from '../wodLogic';
 
 const DIAS = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
 
@@ -557,7 +558,7 @@ export default function HomeScreen({ navigate }) {
                 {day.strength && (
                   <Section title={`💪 FUERZA — ${day.strength.title}`} accent={t.accent} defaultOpen={true}>
                     {(day.strength.sets || []).map((s, i) => {
-                      const p = s.desc?.match(/(\d+)%/)?.[1];
+                      const p = parsePercent(s.desc);
                       return (
                         <View key={i} style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 10, marginBottom: 7 }}>
                           <View style={{ flexDirection: 'row', gap: 8 }}>

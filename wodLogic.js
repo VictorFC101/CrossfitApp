@@ -69,6 +69,13 @@ export function inferRmKeyFromText(text) {
   return null;
 }
 
+// Primer porcentaje de la descripción de una serie, como número ("5 reps al 72,5%" → 72.5).
+// Acepta decimales con coma o punto; null si no hay porcentaje.
+export function parsePercent(desc) {
+  const m = desc?.match(/(\d+(?:[.,]\d+)?)\s*%/);
+  return m ? parseFloat(m[1].replace(',', '.')) : null;
+}
+
 // Calcula el RM efectivo de un día de fuerza, teniendo en cuenta movimientos
 // "complejo" (rmKeys: [k1, k2]) → se usa el RM más bajo de los dos disponibles.
 // Si el día no trae `rmKeys` explícito (p.ej. programas subidos por JSON),

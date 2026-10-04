@@ -7,6 +7,7 @@ import { useSocial } from '../SocialContext';
 import { MOVEMENTS_DB, CATEGORIES, CATEGORY_COLORS } from '../movements_db';
 import { RM_NAMES, TYPE_COLORS as SHARED_TYPE_COLORS } from '../constants';
 import { parseDateFromDay } from '../dateUtils';
+import { parsePercent } from '../wodLogic';
 
 const rmNames = RM_NAMES;
 
@@ -179,7 +180,7 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
                     /* FUERZA: un input de peso por serie */
                     <>
                       {(part.sets || []).map((set, si) => {
-                        const p_pct = set.desc?.match(/(\d+)%/)?.[1];
+                        const p_pct = parsePercent(set.desc);
                         return (
                           <View key={si} style={{ backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, padding: 10, marginBottom: 8 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>

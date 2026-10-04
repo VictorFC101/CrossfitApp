@@ -99,3 +99,12 @@ describe('wodLogic', () => {
     });
   });
 });
+
+describe('parsePercent', () => {
+  const { parsePercent } = require('../wodLogic');
+  test('entero', () => expect(parsePercent('5 reps al 70%')).toBe(70));
+  test('decimal con coma (formato de los programas en bloques)', () => expect(parsePercent('5 reps al 72,5%')).toBe(72.5));
+  test('decimal con punto', () => expect(parsePercent('3 reps al 77.5 %')).toBe(77.5));
+  test('sin porcentaje', () => expect(parsePercent('Técnica · 2 Hang Power Snatches')).toBeNull());
+  test('desc vacía o ausente', () => { expect(parsePercent('')).toBeNull(); expect(parsePercent(undefined)).toBeNull(); });
+});
