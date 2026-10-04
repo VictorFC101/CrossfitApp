@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
+import { CACHE_KEYS } from './constants';
 
 const AppContext = createContext();
 
@@ -19,6 +20,7 @@ export function AppProvider({ children }) {
 
   const appStateRef = useRef(AppState.currentState);
   const partnerChannelRef = useRef(null);
+  const hasProfileRef = useRef(false); // ya hay perfil en pantalla (caché o red): no volver a bloquear con spinner
 
   useEffect(() => {
     loadLocalData();
@@ -26,14 +28,18 @@ export function AppProvider({ children }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) loadUserProfile(session.user.id);
-      else setUserProfile(null);
+      else if (event === 'SIGNED_OUT') {
+        setUserProfile(null);
+        hasProfileRef.current = false;
+        AsyncStorage.multiRemove(Object.values(CACHE_KEYS)).catch(() => {});
+      }
     });
 
     // Refrescar perfil (y pareja) cuando la app vuelve al primer plano
     const appStateSub = AppState.addEventListener('change', (nextState) => {
       if (appStateRef.current !== 'active' && nextState === 'active') {
-        supabase.auth.getUser().then(({ data: { user } }) => {
-          if (user) loadUserProfile(user.id);
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session?.user) loadUserProfile(session.user.id);
         });
       }
       appStateRef.current = nextState;
@@ -51,6 +57,13 @@ export function AppProvider({ children }) {
       const storedResultados = await AsyncStorage.getItem('user_resultados');
       const storedWods = await AsyncStorage.getItem('user_wods_libres');
       const storedOnboarding = await AsyncStorage.getItem('@crossfit_onboarding_done');
+      const storedProfile = await AsyncStorage.getItem(CACHE_KEYS.USER_PROFILE);
+      // Perfil en caché: la app se pinta ya, sin esperar a las queries de red
+      if (storedProfile && !hasProfileRef.current) {
+        hasProfileRef.current = true;
+        setUserProfile(JSON.parse(storedProfile));
+        setLoadingProfile(false);
+      }
       if (storedRms) setRms(JSON.parse(storedRms));
       if (storedResultados) setResultados(JSON.parse(storedResultados));
       if (storedWods) setWodsLibres(JSON.parse(storedWods));
@@ -59,12 +72,13 @@ export function AppProvider({ children }) {
   };
 
   const loadUserProfile = async (userId) => {
-    setLoadingProfile(true);
+    if (!hasProfileRef.current) setLoadingProfile(true);
     try {
       let uid = userId;
       if (!uid) {
-        const { data: { user } } = await supabase.auth.getUser();
-        uid = user?.id;
+        // getSession lee la sesión local: no depende de la red (getUser sí)
+        const { data: { session } } = await supabase.auth.getSession();
+        uid = session?.user?.id;
       }
       if (!uid) { setLoadingProfile(false); return; }
 
@@ -91,7 +105,14 @@ export function AppProvider({ children }) {
           if (uid) supabase.from('usuarios').update({ onboarding_completed: true }).eq('id', uid).then(() => {});
         }
       }
-      if (data) setUserProfile({ ...data, ...(privateData || {}), onboarding_completed: onboardingDone });
+      if (data) {
+        const profile = { ...data, ...(privateData || {}), onboarding_completed: onboardingDone };
+        setUserProfile(profile);
+        hasProfileRef.current = true;
+        AsyncStorage.setItem(CACHE_KEYS.USER_PROFILE, JSON.stringify(profile)).catch(() => {});
+      }
+      // El gate de App.js solo necesita perfil + onboarding: pareja, RMs y resultados siguen en segundo plano
+      setLoadingProfile(false);
 
       // Cargar perfil y resultados del partner
       const partnerId = privateData?.partner_id;
@@ -289,7 +310,8 @@ export function AppProvider({ children }) {
       setPartnerResultados({});
       setPartnerRequest(null);
       setSentPartnerRequest(null);
-      await AsyncStorage.multiRemove(['user_rms', 'user_resultados', 'user_wods_libres', 'user_nombre', 'user_genero']);
+      hasProfileRef.current = false;
+      await AsyncStorage.multiRemove(['user_rms', 'user_resultados', 'user_wods_libres', 'user_nombre', 'user_genero', ...Object.values(CACHE_KEYS)]);
     } catch (e) {}
   };
 

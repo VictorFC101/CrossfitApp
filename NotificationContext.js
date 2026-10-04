@@ -7,13 +7,15 @@ import { supabase } from './supabase';
 
 const NotificationContext = createContext();
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
 
 const REMINDER_ID = 'wod-daily-reminder';
 export const REMINDER_HOURS = [6, 7, 8, 9, 17, 18, 19];
@@ -40,6 +42,7 @@ export function NotificationProvider({ children }) {
   }, []);
 
   const registerForPushNotifications = async () => {
+    if (Platform.OS === 'web') return; // Notificaciones push no disponibles en la versión web
     try {
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('default', {
@@ -86,6 +89,7 @@ export function NotificationProvider({ children }) {
   };
 
   const scheduleWodReminder = async (hour) => {
+    if (Platform.OS === 'web') return; // No disponible en la versión web
     try {
       // Verificar permisos antes de intentar programar
       const { status } = await Notifications.getPermissionsAsync();
@@ -119,6 +123,7 @@ export function NotificationProvider({ children }) {
   };
 
   const cancelWodReminder = async () => {
+    if (Platform.OS === 'web') return; // No disponible en la versión web
     try {
       await Notifications.cancelScheduledNotificationAsync(REMINDER_ID).catch(() => {});
       setReminderEnabled(false);

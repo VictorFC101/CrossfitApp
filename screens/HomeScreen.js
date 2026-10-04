@@ -5,6 +5,8 @@ import { useTheme } from '../ThemeContext';
 import { useProgram, getProgramDateRange } from '../ProgramContext';
 import { useNotifications } from '../NotificationContext';
 import { supabase } from '../supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CACHE_KEYS } from '../constants';
 import { parseDateFromDay, isToday, isPast, getInitialIdx, isTodayInProgram, getToday, assignDatesFromStart } from '../dateUtils';
 
 const DIAS = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
@@ -179,18 +181,44 @@ export default function HomeScreen({ navigate }) {
   const { activeProgram, loading, addProgram, deleteProgram, programs } = useProgram();
   const { notifications, markAsRead } = useNotifications();
   const [processingAssign, setProcessingAssign] = useState(false);
-  const [hasActiveAsignacion, setHasActiveAsignacion] = useState(null); // null = checking
+  const [hasActiveAsignacion, setHasActiveAsignacionState] = useState(null); // null = checking
+
+  const setHasActiveAsignacion = (value) => {
+    setHasActiveAsignacionState(value);
+    AsyncStorage.setItem(CACHE_KEYS.HAS_ASIGNACION, value ? '1' : '0').catch(() => {});
+  };
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) { setHasActiveAsignacion(false); return; }
-      supabase.from('asignaciones')
+    let cancelled = false;
+    (async () => {
+      // 1) Último valor conocido: el programa se muestra al instante, también sin red
+      try {
+        const cached = await AsyncStorage.getItem(CACHE_KEYS.HAS_ASIGNACION);
+        if (!cancelled && cached !== null) setHasActiveAsignacionState(prev => prev ?? cached === '1');
+      } catch (_) {}
+
+      // 2) Confirmar con Supabase. Solo una respuesta válida sobrescribe la caché:
+      //    un fallo de red nunca oculta el programa del atleta.
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      const uid = session?.user?.id;
+      if (!uid) {
+        // Sin red con token caducado getSession devuelve error: mantener lo cacheado
+        if (!cancelled) {
+          if (sessionError) setHasActiveAsignacionState(prev => prev ?? true);
+          else setHasActiveAsignacion(false);
+        }
+        return;
+      }
+      const { data, error } = await supabase.from('asignaciones')
         .select('id')
-        .eq('user_id', user.id)
+        .eq('user_id', uid)
         .in('status', ['activo', 'pendiente'])
-        .limit(1)
-        .then(({ data }) => setHasActiveAsignacion(!!(data && data.length > 0)));
-    });
+        .limit(1);
+      if (cancelled) return;
+      if (!error) setHasActiveAsignacion(!!(data && data.length > 0));
+      else setHasActiveAsignacionState(prev => prev ?? true);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const pendingNotif = notifications.find(n => n.tipo === 'programa_asignado' && !n.leida);

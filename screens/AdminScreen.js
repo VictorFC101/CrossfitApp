@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../ThemeContext';
@@ -181,7 +181,10 @@ function AddJsonModal({ visible, onClose, onSave }) {
       // Usamos expo-file-system (no fetch().text()): fetch sobre URIs file:// puede
       // truncar archivos grandes con muchos caracteres multibyte (emojis), provocando
       // "Unexpected end of input" al hacer JSON.parse de un texto cortado a mitad.
-      let text = await FileSystem.readAsStringAsync(asset.uri);
+      // En web no existe file:// ni expo-file-system; DocumentPicker devuelve un blob/data-uri.
+      let text = Platform.OS === 'web'
+        ? await (await fetch(asset.uri)).text()
+        : await FileSystem.readAsStringAsync(asset.uri);
       setFileSize(text.length);
       if (!text || !text.trim()) {
         throw new Error('El archivo está vacío o no se pudo leer correctamente');

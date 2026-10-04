@@ -5,6 +5,7 @@ import { useApp } from '../AppContext';
 import { useTheme } from '../ThemeContext';
 import { RM_CATEGORIES } from '../constants';
 import { supabase } from '../supabase';
+import { estimateOneRepMax, oneRepMaxWarning, buildWeightTable } from '../rmLogic';
 
 const SCREEN_W = Dimensions.get('window').width;
 const CHART_W = SCREEN_W - 72; // padding scrollview 14*2 + card padding 14*2 + margen
@@ -310,16 +311,8 @@ export default function RMScreen() {
                     </TouchableOpacity>
 
                     {showCalc && (() => {
-                      const p = parseFloat(calcPeso);
-                      const r = parseInt(calcReps);
-                      const validP = p > 0;
-                      const validR = r >= 1 && r <= 30;
-                      const estimated = validP && validR
-                        ? Math.round(p * (1 + r / 30))
-                        : null;
-                      const warning = r > 12
-                        ? 'Con más de 12 reps la estimación es menos precisa'
-                        : r === 1 ? 'Con 1 rep ya tienes tu 1RM directo' : null;
+                      const estimated = estimateOneRepMax(calcPeso, calcReps);
+                      const warning = oneRepMaxWarning(calcReps);
 
                       return (
                         <View style={{ marginTop: 12 }}>
@@ -400,11 +393,11 @@ export default function RMScreen() {
                       {/* TABLA DE PESOS */}
                       <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, marginBottom: 8 }}>TABLA DE PESOS</Text>
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
-                        {mv.pcts.map((p) => (
-                          <View key={p} style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 10, minWidth: 90, alignItems: 'center' }}>
-                            <Text style={{ fontSize: t.fs(11), color: t.text3, marginBottom: 2 }}>{Math.round(p * 100)}%</Text>
+                        {buildWeightTable(val, mv.pcts).map((row) => (
+                          <View key={row.pct} style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 10, minWidth: 90, alignItems: 'center' }}>
+                            <Text style={{ fontSize: t.fs(11), color: t.text3, marginBottom: 2 }}>{row.pctLabel}%</Text>
                             <Text style={{ fontSize: t.fs(16), fontWeight: '900', color: accentColor }}>
-                              {Math.round(val * p)}<Text style={{ fontSize: t.fs(10), color: t.text3 }}> kg</Text>
+                              {row.weight}<Text style={{ fontSize: t.fs(10), color: t.text3 }}> kg</Text>
                             </Text>
                           </View>
                         ))}

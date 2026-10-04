@@ -11,6 +11,7 @@ const MONTH_MAP_EN = {
 // Extrae día, mes y año de un string como "Lunes 30 Mar" o "Miércoles 1 Abr"
 // El año lo infiere comparando con la fecha real del dispositivo
 function extractFromDayStr(dayStr) {
+  if (typeof dayStr !== 'string' || !dayStr.trim()) return null;
   const parts = dayStr.trim().split(' ');
   let dayNum = null;
   let monthIdx = null;

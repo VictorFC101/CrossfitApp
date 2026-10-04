@@ -73,3 +73,9 @@ export const TYPE_COLORS = {
   Libre:         '#f4a261',
   Gimnásticos:   '#52b788',
 };
+
+// Claves de caché offline (F1). Se borran al cerrar sesión para no filtrar datos entre usuarios.
+export const CACHE_KEYS = {
+  USER_PROFILE: '@crossfit_user_profile',
+  HAS_ASIGNACION: '@crossfit_has_asignacion',
+};

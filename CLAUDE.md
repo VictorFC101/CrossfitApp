@@ -10,9 +10,21 @@ Cuando el usuario describa una tarea o bug, sigue siempre este orden:
 2. DESARROLLADOR — Solo tras aprobación explícita: implementa los cambios en los ficheros reales.
 3. QA — Si el usuario reporta un bug tras probar: diagnostica causa raíz, entrega checklist de fixes clasificados por complejidad.
 
+### QA automático
+
+Antes de dar por terminada una tarea de DESARROLLADOR o QA, ejecuta en este orden:
+
+1. `npm test`
+2. `preview_start` con la config `"web"` (`.claude/launch.json`) para levantar Expo Web.
+3. Navega por las pantallas afectadas en el panel del navegador, logueado como el usuario de prueba QA.
+4. Revisa errores de consola y toma capturas de las pantallas tocadas.
+5. Solo entonces entrega el resultado al usuario.
+
+Funcionalidades nativas (notificaciones push, compartir resultado como imagen, subir foto desde cámara/rollo en nativo, `eas update`) no se pueden validar en web — siguen requiriendo prueba en un teléfono real o simulador.
+
 ## Reglas críticas
 
-- Provider nesting obligatorio: ThemeProvider → AuthProvider → AppProvider → SocialProvider
+- Provider nesting obligatorio (App.js): SafeAreaProvider → ThemeProvider → ErrorBoundary → ProgramProvider → NotificationProvider → AppProvider → AppInner (sesión/auth gestionada aquí) → SocialProvider
 - FK de tablas sociales apuntan a public.usuarios, NUNCA a auth.users
 - Reacciones: insert/update/delete explícito, nunca upsert
 - Todo texto de UI en español

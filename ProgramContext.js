@@ -4,94 +4,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { plan as legacyDefaultPlan } from './data';
 import { parseDateFromDay } from './dateUtils';
 import { supabase } from './supabase';
+import { getProgramDateRange, getActiveProgram, enrichProgram, isNetworkError, rowToProgram } from './programLogic';
 
 const ProgramContext = createContext();
-
-// Obtener fecha de inicio y fin de un programa
-function getProgramDateRange(program) {
-  const allDays = program.weeks.flatMap(w => w.days);
-  const dates = allDays.map(d => parseDateFromDay(d.day)).filter(Boolean);
-  if (!dates.length) return { start: null, end: null };
-  return {
-    start: new Date(Math.min(...dates.map(d => d.getTime()))),
-    end: new Date(Math.max(...dates.map(d => d.getTime())))
-  };
-}
-
-// Determinar qué programa corresponde a hoy
-function getActiveProgram(programs) {
-  const today = new Date();
-  today.setHours(12, 0, 0, 0);
-
-  // 1. Buscar programa cuyo rango incluye hoy exactamente
-  for (const p of programs) {
-    const { start, end } = getProgramDateRange(p);
-    if (start && end && today >= start && today <= end) return p;
-  }
-
-  // 2. Si no hay ninguno activo hoy, buscar el más reciente pasado
-  let bestPast = null;
-  let bestPastDiff = Infinity;
-  for (const p of programs) {
-    const { end } = getProgramDateRange(p);
-    if (end && end < today) {
-      const diff = today - end;
-      if (diff < bestPastDiff) { bestPastDiff = diff; bestPast = p; }
-    }
-  }
-  if (bestPast) return bestPast;
-
-  // 3. Si no hay pasados, el próximo futuro
-  let bestFuture = null;
-  let bestFutureDiff = Infinity;
-  for (const p of programs) {
-    const { start } = getProgramDateRange(p);
-    if (start && start > today) {
-      const diff = start - today;
-      if (diff < bestFutureDiff) { bestFutureDiff = diff; bestFuture = p; }
-    }
-  }
-  return bestFuture || programs[0];
-}
-
-// Enriquecer programa con metadata calculada
-function enrichProgram(program) {
-  const { start, end } = getProgramDateRange(program);
-  const MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  const today = new Date();
-  today.setHours(12, 0, 0, 0);
-
-  let status = 'futuro';
-  if (start && end) {
-    if (today >= start && today <= end) status = 'activo';
-    else if (end < today) status = 'completado';
-  }
-
-  const title = program.name || (() => {
-    if (!start) return 'Programa';
-    const MONTHS_FULL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
-      'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-    if (!end || start.getMonth() === end.getMonth()) {
-      return `CrossFit ${MONTHS_FULL[start.getMonth()]} ${start.getFullYear()}`;
-    }
-    return `CrossFit ${MONTHS[start.getMonth()]}–${MONTHS[end.getMonth()]} ${start.getFullYear()}`;
-  })();
-
-  const range = start && end
-    ? `${start.getDate()} ${MONTHS[start.getMonth()]} – ${end.getDate()} ${MONTHS[end.getMonth()]} ${end.getFullYear()}`
-    : '';
-
-  return { ...program, _meta: { start, end, status, title, range } };
-}
-
-// Convertir fila de Supabase a objeto de programa
-function rowToProgram(row) {
-  return { ...row.data, id: row.id, name: row.name || row.data?.name };
-}
 
 export function ProgramProvider({ children }) {
   const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [offline, setOffline] = useState(false); // último refresco falló por red
+  const hydratedRef = useRef(false);
   const channelRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
   const appStateSubRef = useRef(null);
@@ -151,42 +72,55 @@ export function ProgramProvider({ children }) {
       .subscribe();
   };
 
+  const readCachedPrograms = async () => {
+    const stored = await AsyncStorage.getItem('all_programs');
+    let allPrograms = stored ? JSON.parse(stored) : [];
+
+    // Migración: eliminar el programa por defecto antiguo (Marzo 2026)
+    if (allPrograms.some(p => p.id === 'default' && p.weeks?.[0]?.days?.[0]?.day?.includes('30 Mar'))) {
+      allPrograms = allPrograms.filter(p => p.id !== 'default');
+      await AsyncStorage.setItem('all_programs', JSON.stringify(allPrograms));
+    }
+    return allPrograms;
+  };
+
   const loadPrograms = async () => {
+    // 1) Caché primero (solo la primera vez): el WOD se pinta al instante, sin esperar a la red
+    if (!hydratedRef.current) {
+      hydratedRef.current = true;
+      try {
+        const cached = await readCachedPrograms();
+        if (cached.length) {
+          setPrograms(cached.map(enrichProgram));
+          setLoading(false);
+        }
+      } catch (_) {}
+    }
+
+    // 2) Supabase como fuente de verdad: refresca en segundo plano
     try {
-      // Supabase como fuente de verdad
-      const { data: remoteRows } = await supabase
+      const { data: remoteRows, error } = await supabase
         .from('programas')
         .select('id, name, data')
         .eq('publico', true);
+      if (error) throw error;
+      setOffline(false);
 
       if (remoteRows?.length) {
         const allPrograms = remoteRows.map(rowToProgram);
         await AsyncStorage.setItem('all_programs', JSON.stringify(allPrograms));
         setPrograms(allPrograms.map(enrichProgram));
-        setLoading(false);
         return;
       }
 
-      // Fallback: AsyncStorage (offline o sin programas en Supabase aún)
-      const stored = await AsyncStorage.getItem('all_programs');
-      let allPrograms = stored ? JSON.parse(stored) : [];
-
-      // Migración: eliminar el programa por defecto antiguo (Marzo 2026)
-      if (allPrograms.some(p => p.id === 'default' && p.weeks?.[0]?.days?.[0]?.day?.includes('30 Mar'))) {
-        allPrograms = allPrograms.filter(p => p.id !== 'default');
-        await AsyncStorage.setItem('all_programs', JSON.stringify(allPrograms));
-      }
-
-      setPrograms(allPrograms.map(enrichProgram));
+      // Sin programas en Supabase aún: usar caché local
+      setPrograms((await readCachedPrograms()).map(enrichProgram));
     } catch (e) {
-      // Error de red — usar caché local
+      // Error de red — se mantiene lo que ya hay en pantalla (o la caché)
+      if (isNetworkError(e)) setOffline(true);
       try {
-        const stored = await AsyncStorage.getItem('all_programs');
-        const allPrograms = stored ? JSON.parse(stored) : [];
-        setPrograms(allPrograms.map(enrichProgram));
-      } catch (_) {
-        setPrograms([]);
-      }
+        setPrograms((await readCachedPrograms()).map(enrichProgram));
+      } catch (_) {}
     } finally {
       setLoading(false);
     }
@@ -317,6 +251,7 @@ export function ProgramProvider({ children }) {
       programs: sortedPrograms,
       activeProgram,
       loading,
+      offline,
       addProgram,
       deleteProgram,
       replaceDefaultProgram,

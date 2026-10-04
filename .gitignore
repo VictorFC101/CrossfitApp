@@ -42,3 +42,5 @@ yarn-error.*
 
 # graphify
 graphify-out/
+
+.claude/settings.local.json

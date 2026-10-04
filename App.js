@@ -5,10 +5,13 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import SplashAnimated from './SplashAnimated';
 import { AppProvider } from './AppContext';
 import { ThemeProvider, useTheme } from './ThemeContext';
-import { ProgramProvider } from './ProgramContext';
+import { ProgramProvider, useProgram } from './ProgramContext';
+import ErrorBoundary from './ErrorBoundary';
 import { NotificationProvider } from './NotificationContext';
 import { SocialProvider } from './SocialContext';
-import { supabase } from './supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isAuthRetryableFetchError } from '@supabase/supabase-js';
+import { supabase, AUTH_STORAGE_KEY } from './supabase';
 
 import HomeScreen from './screens/HomeScreen';
 import WodScreen from './screens/WodScreen';
@@ -41,16 +44,36 @@ function AppInner() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { userProfile, loadingProfile, onboardingCompleted } = useApp();
+  const { offline } = useProgram();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    let cancelled = false;
+    (async () => {
+      // 1) Sesión guardada en disco: entra al instante, también sin red
+      try {
+        const raw = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
+        const stored = raw ? JSON.parse(raw) : null;
+        if (!cancelled && stored?.user) { setSession(stored); setLoading(false); }
+      } catch (_) {}
+
+      // 2) Validar con Supabase. Con el token caducado y sin red, getSession devuelve null
+      //    con un error reintentable: en ese caso se mantiene la sesión guardada.
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (session) setSession(session);
+      else if (!isAuthRetryableFetchError(error)) setSession(null);
       setLoading(false);
+    })();
+    // Solo un SIGNED_OUT real devuelve al login; un evento transitorio sin sesión
+    // (p. ej. refresco fallido por red) no debe expulsar al usuario.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) setSession(session);
+      else if (event === 'SIGNED_OUT') setSession(null);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (loading || (session && loadingProfile)) {
@@ -119,6 +142,14 @@ function AppInner() {
           })}
         </View>
 
+        {offline && (
+          <View style={{ backgroundColor: t.bg2, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: t.border }}>
+            <Text style={{ color: t.text2, fontSize: t.fs(11), textAlign: 'center', fontWeight: '700' }}>
+              Sin conexión · mostrando datos guardados
+            </Text>
+          </View>
+        )}
+
         {/* ── CONTENIDO ── */}
         <View style={{ flex: 1 }}>
           {Object.entries(SCREENS).map(([key, ScreenComp]) => (
@@ -139,13 +170,15 @@ export default function App() {
     <SafeAreaProvider>
       <View style={{ flex: 1 }}>
         <ThemeProvider>
-          <ProgramProvider>
-            <NotificationProvider>
-              <AppProvider>
-                <AppInner />
-              </AppProvider>
-            </NotificationProvider>
-          </ProgramProvider>
+          <ErrorBoundary>
+            <ProgramProvider>
+              <NotificationProvider>
+                <AppProvider>
+                  <AppInner />
+                </AppProvider>
+              </NotificationProvider>
+            </ProgramProvider>
+          </ErrorBoundary>
         </ThemeProvider>
 
         {showSplash && (

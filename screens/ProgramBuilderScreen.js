@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
@@ -553,7 +553,10 @@ export default function ProgramBuilderScreen({ onClose }) {
     try {
       const result = await DocumentPicker.getDocumentAsync({ type: 'application/json', copyToCacheDirectory: true });
       if (result.canceled) return;
-      const content = await FileSystem.readAsStringAsync(result.assets[0].uri);
+      const assetUri = result.assets[0].uri;
+      const content = Platform.OS === 'web'
+        ? await (await fetch(assetUri)).text()
+        : await FileSystem.readAsStringAsync(assetUri);
       const parsed = JSON.parse(content);
       if (!parsed.weeks) throw new Error('El JSON no tiene campo "weeks"');
       const result2 = await addProgram(parsed);

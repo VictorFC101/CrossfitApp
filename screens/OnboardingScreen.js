@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Image, Platform } from 'react-native';
 import { useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
@@ -35,8 +35,10 @@ export default function OnboardingScreen({ onComplete }) {
       setUploadingFoto(true);
       try {
         const path = `${userProfile.id}/avatar.jpg`;
-        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-        const { error } = await supabase.storage.from('avatars').upload(path, decode(base64), { contentType: 'image/jpeg', upsert: true });
+        const arrayBuffer = Platform.OS === 'web'
+          ? await (await fetch(uri)).arrayBuffer()
+          : decode(await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }));
+        const { error } = await supabase.storage.from('avatars').upload(path, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
         if (!error) {
           const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
           await supabase.from('usuarios').update({ avatar_url: publicUrl }).eq('id', userProfile.id);

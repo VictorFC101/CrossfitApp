@@ -3,16 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { getInitialIdx, isTodayInProgram } from '../dateUtils';
-
-const parseMins = (str) => {
-  const m = str?.match(/(\d+)\s*min/i);
-  return m ? parseInt(m[1]) : null;
-};
-
-const parseEmom = (str) => {
-  const m = str?.match(/(\d+)[''´']?\s*[×xX]\s*(\d+)/i);
-  return m ? { interval: m[1], rounds: m[2] } : null;
-};
+import { parseMins, parseEmom, detectTimerConfig } from '../timerLogic';
 
 // Persists across tab switches (component unmount/remount)
 let syncedForDay = null;
@@ -47,36 +38,30 @@ export default function TimerScreen() {
   useEffect(() => {
     if (!todayDay?.wod?.type) return;
     if (syncedForDay === todayDay.day) return;
-    const { type, duration } = todayDay.wod;
-    const typeUpper = (type || '').toUpperCase();
+    const cfg = detectTimerConfig(todayDay.wod);
+    if (!cfg) return;
 
-    if (typeUpper.includes('AMRAP')) {
-      const mins = parseMins(duration);
+    if (cfg.mode === 'AMRAP') {
       setMode('AMRAP');
-      if (mins) { setCustomMins(String(mins)); setSeconds(mins * 60); }
+      if (cfg.mins) { setCustomMins(String(cfg.mins)); setSeconds(cfg.mins * 60); }
       setRounds(0);
       setRunning(false);
       syncedForDay = todayDay.day;
       setSynced(true);
-    } else if (typeUpper.includes('EMOM')) {
-      const emom = parseEmom(duration);
+    } else if (cfg.mode === 'EMOM') {
       setMode('EMOM');
-      if (emom) {
-        setEmomMins(emom.interval);
-        setEmomRounds(emom.rounds);
-        setSeconds(parseInt(emom.interval) * 60);
-      } else {
-        const mins = parseMins(duration);
-        if (mins) { setEmomMins('1'); setEmomRounds(String(mins)); setSeconds(60); }
+      if (cfg.emomMins && cfg.emomRounds) {
+        setEmomMins(cfg.emomMins);
+        setEmomRounds(cfg.emomRounds);
+        setSeconds(parseInt(cfg.emomMins) * 60);
       }
       setCurrentEmomRound(1);
       setRunning(false);
       syncedForDay = todayDay.day;
       setSynced(true);
-    } else if (typeUpper.includes('FOR TIME') || typeUpper.includes('TIMECAP') || typeUpper.includes('TIME CAP')) {
-      const mins = parseMins(duration);
+    } else if (cfg.mode === 'FOR TIME') {
       setMode('FOR TIME');
-      if (mins) { setCustomMins(String(mins)); setSeconds(mins * 60); }
+      if (cfg.mins) { setCustomMins(String(cfg.mins)); setSeconds(cfg.mins * 60); }
       setRounds(0);
       setRunning(false);
       syncedForDay = todayDay.day;

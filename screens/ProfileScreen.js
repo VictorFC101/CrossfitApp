@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Image, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Image, Alert, Platform } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import AdminScreen from './AdminScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -121,11 +121,11 @@ export default function ProfileScreen() {
       if (!userProfile?.id) return;
       try {
         const path = `${userProfile.id}/avatar.jpg`;
-        // Leer como base64 y convertir a ArrayBuffer (método fiable en React Native)
-        const base64 = await FileSystem.readAsStringAsync(uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        const arrayBuffer = decode(base64);
+        // En web, expo-image-picker devuelve un blob URI: se puede pasar directo a fetch
+        // para obtener un ArrayBuffer. En nativo, se lee como base64 (método fiable).
+        const arrayBuffer = Platform.OS === 'web'
+          ? await (await fetch(uri)).arrayBuffer()
+          : decode(await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }));
         // Subir a Supabase Storage
         const { error: uploadError } = await supabase.storage
           .from('avatars')
