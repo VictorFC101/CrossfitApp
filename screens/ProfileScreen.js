@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import AdminScreen from './AdminScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import { useApp } from '../AppContext';
 import { useTheme, ACCENTS, FONT_SCALES } from '../ThemeContext';

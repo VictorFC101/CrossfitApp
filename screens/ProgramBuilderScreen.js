@@ -1,7 +1,7 @@
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { parseDateFromDay } from '../dateUtils';
