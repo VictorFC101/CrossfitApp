@@ -10,7 +10,18 @@
     "test": "jest"
   },
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "moduleDirectories": [
+      "node_modules",
+      "node_modules/expo/node_modules"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "<rootDir>/.claude/"
+    ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/.claude/"
+    ]
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.16",
