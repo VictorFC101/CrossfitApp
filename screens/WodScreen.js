@@ -8,6 +8,7 @@ import { useApp } from '../AppContext';
 import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { getTodayDay, isTodayInProgram, formatDateShort, getToday } from '../dateUtils';
+import { useToday } from '../hooks/useToday';
 import { RM_CATEGORIES } from '../constants';
 import { RM_KEY_NAMES, RM_NAME_PATTERNS, inferRmKeysFromText, getEffectiveRM } from '../wodLogic';
 
@@ -459,6 +460,7 @@ export default function WodScreen({ navigate }) {
   const { rms, resultados, saveResultado, partnerProfile, partnerResultados } = useApp();
   const t = useTheme();
   const { activeProgram } = useProgram();
+  const todayKey = useToday(); // fuerza re-render al cambiar de día
   const [resultado, setResultado] = useState('');
   const [notas, setNotas]         = useState('');
   const [rx, setRx]               = useState(true);
@@ -516,7 +518,7 @@ export default function WodScreen({ navigate }) {
       });
       setPartResults(init);
     }
-  }, [savedResult]);
+  }, [day?.day, savedResult]);
 
   const updatePart = (key, fields) =>
     setPartResults(prev => ({ ...prev, [key]: { ...(prev[key] || {}), ...fields } }));

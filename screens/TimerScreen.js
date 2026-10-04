@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { getInitialIdx, isTodayInProgram } from '../dateUtils';
+import { useToday } from '../hooks/useToday';
 import { parseMins, parseEmom, detectTimerConfig } from '../timerLogic';
 
 // Persists across tab switches (component unmount/remount)
@@ -11,6 +12,7 @@ let syncedForDay = null;
 export default function TimerScreen() {
   const t = useTheme();
   const { activeProgram } = useProgram();
+  useToday(); // re-render al cambiar de día
 
   // Calcular WOD del día real desde el programa activo
   const allDays = activeProgram

@@ -7,7 +7,8 @@ import { useNotifications } from '../NotificationContext';
 import { supabase } from '../supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CACHE_KEYS } from '../constants';
-import { parseDateFromDay, isToday, isPast, getInitialIdx, isTodayInProgram, getToday, assignDatesFromStart } from '../dateUtils';
+import { parseDateFromDay, isToday, isPast, getInitialIdx, isTodayInProgram, getToday, assignDatesFromStart, daySyncKey } from '../dateUtils';
+import { useToday } from '../hooks/useToday';
 
 const DIAS = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
 
@@ -312,14 +313,16 @@ export default function HomeScreen({ navigate }) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showFreeDay, setShowFreeDay] = useState(false);
 
-  // Sincronizar con el día de hoy cuando el programa carga
-  const [initialized, setInitialized] = useState(false);
-  if (!initialized && allDays.length > 0) {
-    setInitialized(true);
-    const idx = getInitialIdx(allDays);
-    setCurrentIdx(idx);
+  // Re-sincronizar con el día de hoy al cambiar la fecha, el programa activo o su longitud.
+  // La navegación manual no se pisa mientras esta clave no cambie.
+  const todayKey = useToday();
+  const syncKey = daySyncKey(todayKey, plan?.id, allDays.length);
+  useEffect(() => {
+    if (allDays.length === 0) return;
+    setCurrentIdx(getInitialIdx(allDays));
     setShowFreeDay(!isTodayInProgram(allDays));
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncKey]);
 
   if (loading || hasActiveAsignacion === null) {
     return (
