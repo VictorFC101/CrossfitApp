@@ -113,7 +113,8 @@ export default function SplashAnimated({ onFinish }) {
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    // absoluteFillObject ya no existe en React Native 0.86 (SDK 57)
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
