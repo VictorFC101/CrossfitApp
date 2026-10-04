@@ -82,8 +82,12 @@ export const CACHE_KEYS = {
 
 // Todas las claves de AsyncStorage de la app (siempre con prefijo @crossfit_).
 // No incluye la clave de sesión de Supabase (AUTH_STORAGE_KEY), que no debe cambiar.
+// Repeticiones permitidas para registrar una marca (1RM, 3RM, 5RM, 10RM)
+export const RM_REPS = [1, 3, 5, 10];
+
 export const STORAGE_KEYS = {
   USER_RMS: '@crossfit_user_rms',
+  USER_RMS_BY_REPS: '@crossfit_user_rms_by_reps',
   USER_RESULTADOS: '@crossfit_user_resultados',
   USER_WODS_LIBRES: '@crossfit_user_wods_libres',
   USER_FOTO: '@crossfit_user_foto',

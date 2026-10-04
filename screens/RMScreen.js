@@ -3,9 +3,10 @@ import { useState, useEffect } from 'react';
 import Svg, { Path, Circle, Line, Text as SvgText, Rect } from 'react-native-svg';
 import { useApp } from '../AppContext';
 import { useTheme } from '../ThemeContext';
-import { RM_CATEGORIES } from '../constants';
+import { RM_CATEGORIES, RM_REPS } from '../constants';
 import { supabase } from '../supabase';
-import { estimateOneRepMax, oneRepMaxWarning, buildWeightTable } from '../rmLogic';
+import BenchmarksView from './BenchmarksView';
+import { estimateOneRepMax, oneRepMaxWarning, buildWeightTable, bestEstimated1RM, formatRmLabel, isValidRmInput } from '../rmLogic';
 
 const SCREEN_W = Dimensions.get('window').width;
 const CHART_W = SCREEN_W - 72; // padding scrollview 14*2 + card padding 14*2 + margen
@@ -125,13 +126,15 @@ const INTENSITY_ZONES = [
 ];
 
 export default function RMScreen() {
-  const { rms, saveRM, userProfile } = useApp();
+  const { rms, rmsByReps, saveRM, userProfile, resultados, wodsLibres } = useApp();
   const t = useTheme();
+  const [view, setView] = useState('rm'); // 'rm' | 'bench'
   const [activeCategory, setActiveCategory] = useState('Halterofilia');
   const [expanded, setExpanded]   = useState(null);
   const [saved, setSaved]         = useState(null);
   const [historial, setHistorial] = useState({});  // { [key]: [{peso, fecha}] }
   const [loadingH, setLoadingH]   = useState(null);
+  const [selReps, setSelReps]     = useState(1); // reps de la marca que se edita
   // Calculadora 1RM
   const [showCalc, setShowCalc]   = useState(false);
   const [calcPeso, setCalcPeso]   = useState('');
@@ -143,31 +146,44 @@ export default function RMScreen() {
   // Cargar historial cuando se expande un movimiento
   useEffect(() => {
     if (!expanded || !userProfile?.id) return;
-    if (historial[expanded]) return; // ya cargado
+    const hKey = `${expanded}|${selReps}`;
+    if (historial[hKey]) return; // ya cargado
     const fetch = async () => {
       setLoadingH(expanded);
       try {
         const { data } = await supabase
           .from('rms_historial')
-          .select('peso, fecha')
+          .select('peso, fecha, reps')
           .eq('user_id', userProfile.id)
           .eq('movimiento', expanded)
+          .eq('reps', selReps)
           .order('fecha', { ascending: true })
           .limit(20);
-        setHistorial(prev => ({ ...prev, [expanded]: data || [] }));
+        setHistorial(prev => ({ ...prev, [hKey]: data || [] }));
       } catch (_) {
-        setHistorial(prev => ({ ...prev, [expanded]: [] }));
+        setHistorial(prev => ({ ...prev, [hKey]: [] }));
       }
       setLoadingH(null);
     };
     fetch();
-  }, [expanded]);
+  }, [expanded, selReps]);
+
+  // Borrador del input: antes se guardaba en cada pulsación y al editar quedaban
+  // fragmentos ("90" → "9") como RM actual. Ahora solo se guarda al terminar de editar.
+  const [draft, setDraft] = useState(null); // { key: 'mov|reps', val }
+  const commitDraft = (key, stored) => {
+    if (!draft || draft.key !== `${key}|${selReps}`) return;
+    const val = draft.val.trim().replace(',', '.');
+    setDraft(null);
+    if (!isValidRmInput(val) || parseFloat(val) === parseFloat(stored)) return;
+    handleSave(key, val);
+  };
 
   const handleSave = async (key, val) => {
-    await saveRM(key, val);
+    await saveRM(key, val, selReps);
     setSaved(key);
     // Invalidar historial para que se recargue
-    setHistorial(prev => { const next = { ...prev }; delete next[key]; return next; });
+    setHistorial(prev => { const next = { ...prev }; delete next[`${key}|${selReps}`]; return next; });
     setTimeout(() => setSaved(null), 2000);
   };
 
@@ -176,6 +192,7 @@ export default function RMScreen() {
     setShowCalc(false);
     setCalcPeso('');
     setCalcReps('');
+    setSelReps(1);
   }, [expanded]);
 
   const handleTabChange = (name) => {
@@ -191,10 +208,24 @@ export default function RMScreen() {
       {/* HEADER */}
       <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: accentColor, padding: 20 }}>
         <Text style={{ fontSize: t.fs(10), color: accentColor + '88', letterSpacing: 4, fontWeight: '700' }}>TUS MARCAS PERSONALES</Text>
-        <Text style={{ fontSize: t.fs(32), fontWeight: '900', letterSpacing: 2, color: t.text, marginTop: 4 }}>MIS 1RM</Text>
-        <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 4 }}>Se sincronizan automáticamente con el WOD</Text>
+        <Text style={{ fontSize: t.fs(32), fontWeight: '900', letterSpacing: 2, color: t.text, marginTop: 4 }}>{view === 'rm' ? 'MIS 1RM' : 'BENCHMARKS'}</Text>
+        <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 4 }}>
+          {view === 'rm' ? 'Se sincronizan automáticamente con el WOD' : 'Tus mejores marcas en los WODs de referencia'}
+        </Text>
+
+        {/* SWITCH 1RM / BENCHMARKS */}
+        <View style={{ flexDirection: 'row', marginTop: 14, gap: 8 }}>
+          {[{ k: 'rm', l: 'MIS 1RM' }, { k: 'bench', l: 'BENCHMARKS' }].map(o => (
+            <TouchableOpacity key={o.k} onPress={() => setView(o.k)}
+              style={{ flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center',
+                backgroundColor: view === o.k ? accentColor : t.bg4, borderWidth: 1.5, borderColor: view === o.k ? accentColor : t.border }}>
+              <Text style={{ fontSize: t.fs(11), fontWeight: '900', letterSpacing: 1, color: view === o.k ? '#fff' : t.text3 }}>{o.l}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
         {/* TABS */}
+        {view === 'rm' && (
         <View style={{ flexDirection: 'row', marginTop: 16, gap: 8 }}>
           {CATEGORY_NAMES.map(name => {
             const isActive = name === activeCategory;
@@ -220,15 +251,22 @@ export default function RMScreen() {
             );
           })}
         </View>
+        )}
       </View>
 
+      {view === 'bench' ? (
+        <BenchmarksView resultados={resultados} wodsLibres={wodsLibres} genero={userProfile?.genero} accentColor={accentColor} />
+      ) : (
       <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 60 }}>
         {category.movements.map((mv) => {
           const isOpen  = expanded === mv.key;
           const val     = parseFloat(rms[mv.key]);
           const hasRM   = val > 0;
           const isSaved = saved === mv.key;
-          const mvHist  = historial[mv.key] || [];
+          const mvHist  = historial[`${mv.key}|${selReps}`] || [];
+          const mvByReps = (rmsByReps && rmsByReps[mv.key]) || {};
+          const nrmReps  = RM_REPS.filter(r => r > 1 && parseFloat(mvByReps[r]) > 0);
+          const est1RM   = !hasRM ? bestEstimated1RM(mvByReps) : null;
           const isLoadingHist = loadingH === mv.key;
 
           return (
@@ -258,6 +296,22 @@ export default function RMScreen() {
                   <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: 4 }}>
                     {hasRM ? `1RM guardado: ${rms[mv.key]} kg` : 'Sin marca registrada'}
                   </Text>
+                  {est1RM && (
+                    <Text style={{ fontSize: t.fs(10), color: t.text2, marginTop: 3 }}>
+                      {`1RM estimado: ${est1RM.kg} kg (desde tu ${formatRmLabel(est1RM.fromReps)})`}
+                    </Text>
+                  )}
+                  {nrmReps.length > 0 && (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                      {nrmReps.map(r => (
+                        <View key={r} style={{ backgroundColor: accentColor + '15', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                          <Text style={{ fontSize: t.fs(10), color: accentColor, fontWeight: '700' }}>
+                            {`${formatRmLabel(r)} ${mvByReps[r]} kg`}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
                 </View>
                 <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
                   <Text style={{ fontSize: t.fs(26), fontWeight: '900', color: hasRM ? accentColor : t.text3 }}>
@@ -274,13 +328,33 @@ export default function RMScreen() {
                   {/* INPUT */}
                   <View style={{ marginTop: 12, marginBottom: 14 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <Text style={{ fontSize: t.fs(10), color: accentColor, letterSpacing: 2, fontWeight: '700' }}>ACTUALIZAR 1RM</Text>
+                      <Text style={{ fontSize: t.fs(10), color: accentColor, letterSpacing: 2, fontWeight: '700' }}>{`ACTUALIZAR ${formatRmLabel(selReps)}`}</Text>
                       {isSaved && <Text style={{ fontSize: t.fs(10), color: '#52b788', fontWeight: '700' }}>✓ GUARDADO</Text>}
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
+                      {RM_REPS.map(r => (
+                        <TouchableOpacity
+                          key={r}
+                          onPress={() => setSelReps(r)}
+                          style={{
+                            paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1,
+                            borderColor: selReps === r ? accentColor : t.border,
+                            backgroundColor: selReps === r ? accentColor + '20' : 'transparent',
+                          }}>
+                          <Text style={{ fontSize: t.fs(11), fontWeight: '700', color: selReps === r ? accentColor : t.text3 }}>
+                            {formatRmLabel(r)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
                     </View>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                       <TextInput
-                        value={rms[mv.key] || ''}
-                        onChangeText={(v) => handleSave(mv.key, v)}
+                        value={draft?.key === `${mv.key}|${selReps}` ? draft.val : ((selReps === 1 ? rms[mv.key] : mvByReps[selReps]) || '')}
+                        onChangeText={(v) => setDraft({ key: `${mv.key}|${selReps}`, val: v })}
+                        onEndEditing={() => commitDraft(mv.key, (selReps === 1 ? rms[mv.key] : mvByReps[selReps]) || '')}
+                        onSubmitEditing={() => commitDraft(mv.key, (selReps === 1 ? rms[mv.key] : mvByReps[selReps]) || '')}
+                        onBlur={() => commitDraft(mv.key, (selReps === 1 ? rms[mv.key] : mvByReps[selReps]) || '')}
+                        returnKeyType="done"
                         keyboardType="numeric"
                         placeholder="kg"
                         placeholderTextColor={t.text3}
@@ -460,6 +534,7 @@ export default function RMScreen() {
           );
         })}
       </ScrollView>
+      )}
     </View>
   );
 }

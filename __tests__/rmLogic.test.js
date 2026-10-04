@@ -1,4 +1,4 @@
-import { estimateOneRepMax, oneRepMaxWarning, buildWeightTable } from '../rmLogic';
+import { estimateOneRepMax, oneRepMaxWarning, buildWeightTable, buildRmsByReps, bestEstimated1RM, formatRmLabel } from '../rmLogic';
 
 describe('rmLogic', () => {
   describe('estimateOneRepMax (Epley)', () => {
@@ -63,5 +63,67 @@ describe('rmLogic', () => {
       expect(buildWeightTable(100, null)).toEqual([]);
       expect(buildWeightTable(100, undefined)).toEqual([]);
     });
+  });
+  describe('buildRmsByReps', () => {
+    it('agrupa por movimiento y reps, y trata filas sin reps como 1RM', () => {
+      const rows = [
+        { movimiento: 'squat', peso: 100, reps: 1 },
+        { movimiento: 'squat', peso: 85, reps: 3 },
+        { movimiento: 'squat', peso: 90 },
+        { movimiento: 'press', peso: 60, reps: 5 },
+      ];
+      expect(buildRmsByReps(rows)).toEqual({
+        squat: { 1: '90', 3: '85' },
+        press: { 5: '60' },
+      });
+    });
+
+    it('regresion: las filas de 1RM siguen presentes en reps 1', () => {
+      const map = buildRmsByReps([{ movimiento: 'deadlift', peso: 140, reps: 1 }]);
+      expect(map.deadlift[1]).toBe('140');
+    });
+
+    it('devuelve objeto vacio con entrada vacia o invalida', () => {
+      expect(buildRmsByReps([])).toEqual({});
+      expect(buildRmsByReps(null)).toEqual({});
+    });
+  });
+
+  describe('bestEstimated1RM', () => {
+    it('prefiere el 3RM sobre el 5RM', () => {
+      const r = bestEstimated1RM({ 5: '80', 3: '90' });
+      expect(r).toEqual({ kg: estimateOneRepMax('90', 3), fromReps: 3 });
+      expect(r.kg).toBe(99);
+    });
+    it('usa Epley con el nRM disponible', () => {
+      expect(bestEstimated1RM({ 5: '80' })).toEqual({ kg: 93, fromReps: 5 });
+    });
+    it('devuelve null si no hay datos', () => {
+      expect(bestEstimated1RM({})).toBeNull();
+      expect(bestEstimated1RM(undefined)).toBeNull();
+    });
+    it('ignora el 1RM (solo estima desde nRM)', () => {
+      expect(bestEstimated1RM({ 1: '100' })).toBeNull();
+    });
+  });
+
+  describe('formatRmLabel', () => {
+    it('formatea las reps', () => {
+      expect(formatRmLabel(1)).toBe('1RM');
+      expect(formatRmLabel(3)).toBe('3RM');
+      expect(formatRmLabel('10')).toBe('10RM');
+    });
+  });
+});
+
+describe('isValidRmInput', () => {
+  const { isValidRmInput } = require('../rmLogic');
+  test('acepta enteros y decimales con coma o punto', () => {
+    expect(isValidRmInput('90')).toBe(true);
+    expect(isValidRmInput('92,5')).toBe(true);
+    expect(isValidRmInput(' 102.5 ')).toBe(true);
+  });
+  test('rechaza vacío, cero, texto y valores absurdos', () => {
+    ['', '0', 'abc', '9a', '-5', '600', null, undefined].forEach(v => expect(isValidRmInput(v)).toBe(false));
   });
 });

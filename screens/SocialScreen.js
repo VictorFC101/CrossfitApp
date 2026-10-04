@@ -5,6 +5,7 @@ import { useSocial } from '../SocialContext';
 import { useProgram } from '../ProgramContext';
 import { supabase } from '../supabase';
 import { RM_NAMES } from '../constants';
+import { formatRmLabel } from '../rmLogic';
 
 function timeAgo(dateStr) {
   const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
@@ -93,7 +94,7 @@ function FeedItem({ item, t, TIPO_ICONS, TIPO_LABELS, getAmigoData, myUserId, on
       case 'rm_nuevo': {
         return (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Text style={{ fontSize: t.fs(13), color: t.text2 }}>{RM_NAMES[d.movimiento] || d.movimiento}</Text>
+            <Text style={{ fontSize: t.fs(13), color: t.text2 }}>{RM_NAMES[d.movimiento] || d.movimiento}{d.reps > 1 ? ` · ${formatRmLabel(d.reps)}` : ''}</Text>
             <Text style={{ fontSize: t.fs(26), fontWeight: '900', color: t.accent }}>
               {d.peso}<Text style={{ fontSize: t.fs(13), fontWeight: '400' }}>kg</Text>
             </Text>

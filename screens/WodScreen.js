@@ -8,6 +8,9 @@ import { useToday } from '../hooks/useToday';
 import { useShareResult } from '../hooks/useShareResult';
 import { fromProgramDay } from '../shareResultLogic';
 import { RM_CATEGORIES } from '../constants';
+import { getBenchmark } from '../benchmarks';
+import { detectDayBenchmark, getBenchmarkHistory, evaluateNewMark } from '../benchmarkLogic';
+import BenchmarkCard from './BenchmarkCard';
 import { RM_KEY_NAMES, RM_NAME_PATTERNS, inferRmKeysFromText, getEffectiveRM, parsePercent } from '../wodLogic';
 
 
@@ -330,7 +333,7 @@ function detectFormat(wod) {
 
 // ─────────────────────────────────────────────────────────────
 export default function WodScreen({ navigate }) {
-  const { rms, resultados, saveResultado, partnerProfile, partnerResultados } = useApp();
+  const { rms, resultados, saveResultado, wodsLibres, partnerProfile, partnerResultados } = useApp();
   const t = useTheme();
   const { activeProgram } = useProgram();
   const todayKey = useToday(); // fuerza re-render al cambiar de día
@@ -342,6 +345,7 @@ export default function WodScreen({ navigate }) {
   const [minutos, setMinutos]     = useState('');
   const [segundos, setSegundos]   = useState('');
   const [saved, setSaved]         = useState(false);
+  const [markMsg, setMarkMsg]     = useState(null); // comparación con la última vez tras guardar
   const [adaptacion, setAdaptacion] = useState(null);
   const [showAdaptModal, setShowAdaptModal] = useState(false);
   const [partResults, setPartResults] = useState({});
@@ -355,6 +359,7 @@ export default function WodScreen({ navigate }) {
 
   const savedResult = day ? resultados[day.day] : null;
   const dayParts = getDayParts(day);
+  const dayBenchmark = detectDayBenchmark(day);
 
   useEffect(() => {
     setNotas(savedResult?.notas || '');
@@ -424,9 +429,18 @@ export default function WodScreen({ navigate }) {
     const timePart   = minutos ? `${minutos.padStart(2,'0')}:${(segundos||'00').padStart(2,'0')}` : '';
     const roundsPart = rondas  ? `${rondas}+${repsExtra || '0'}` : '';
     const finalResultado = [roundsPart, timePart].filter(Boolean).join(' · ') || resultado;
-    await saveResultado(day.day, { resultado: finalResultado, notas, fecha: new Date().toISOString(), rx, adaptacion });
+    // Evaluar contra el historial previo (sin el propio día) antes de guardar
+    const bm = getBenchmark(dayBenchmark);
+    const evalMark = bm
+      ? evaluateNewMark({ resultado: finalResultado, rx }, getBenchmarkHistory(bm.key, resultados, wodsLibres, { excludeDia: day.day }), bm.scoring)
+      : null;
+    await saveResultado(day.day, { resultado: finalResultado, notas, fecha: new Date().toISOString(), rx, adaptacion, benchmark_key: dayBenchmark });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+    if (evalMark) {
+      setMarkMsg(evalMark.message);
+      setTimeout(() => setMarkMsg(null), 3000);
+    }
   };
 
   const compartir = () => share(
@@ -794,6 +808,13 @@ export default function WodScreen({ navigate }) {
             <Text style={{ fontSize: t.fs(10), color: '#4caf50', letterSpacing: 2, fontWeight: '700' }}>✏️ ANOTAR RESULTADO</Text>
             {saved && <Text style={{ fontSize: t.fs(10), color: '#52b788', fontWeight: '700' }}>✓ GUARDADO</Text>}
           </View>
+
+          {dayBenchmark && (
+            <BenchmarkCard benchmarkKey={dayBenchmark} resultados={resultados} wodsLibres={wodsLibres} excludeDia={day.day} />
+          )}
+          {markMsg && (
+            <Text style={{ fontSize: t.fs(13), color: t.accent, fontWeight: '900', marginBottom: 12 }}>{markMsg}</Text>
+          )}
 
           {/* Rx / Scaled */}
           <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
