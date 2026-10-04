@@ -5,6 +5,7 @@ import { useApp } from '../AppContext';
 import { useTheme } from '../ThemeContext';
 import { RM_CATEGORIES, RM_REPS } from '../constants';
 import { supabase } from '../supabase';
+import BenchmarksView from './BenchmarksView';
 import { estimateOneRepMax, oneRepMaxWarning, buildWeightTable, bestEstimated1RM, formatRmLabel, isValidRmInput } from '../rmLogic';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -125,8 +126,9 @@ const INTENSITY_ZONES = [
 ];
 
 export default function RMScreen() {
-  const { rms, rmsByReps, saveRM, userProfile } = useApp();
+  const { rms, rmsByReps, saveRM, userProfile, resultados, wodsLibres } = useApp();
   const t = useTheme();
+  const [view, setView] = useState('rm'); // 'rm' | 'bench'
   const [activeCategory, setActiveCategory] = useState('Halterofilia');
   const [expanded, setExpanded]   = useState(null);
   const [saved, setSaved]         = useState(null);
@@ -206,10 +208,24 @@ export default function RMScreen() {
       {/* HEADER */}
       <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: accentColor, padding: 20 }}>
         <Text style={{ fontSize: t.fs(10), color: accentColor + '88', letterSpacing: 4, fontWeight: '700' }}>TUS MARCAS PERSONALES</Text>
-        <Text style={{ fontSize: t.fs(32), fontWeight: '900', letterSpacing: 2, color: t.text, marginTop: 4 }}>MIS 1RM</Text>
-        <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 4 }}>Se sincronizan automáticamente con el WOD</Text>
+        <Text style={{ fontSize: t.fs(32), fontWeight: '900', letterSpacing: 2, color: t.text, marginTop: 4 }}>{view === 'rm' ? 'MIS 1RM' : 'BENCHMARKS'}</Text>
+        <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 4 }}>
+          {view === 'rm' ? 'Se sincronizan automáticamente con el WOD' : 'Tus mejores marcas en los WODs de referencia'}
+        </Text>
+
+        {/* SWITCH 1RM / BENCHMARKS */}
+        <View style={{ flexDirection: 'row', marginTop: 14, gap: 8 }}>
+          {[{ k: 'rm', l: 'MIS 1RM' }, { k: 'bench', l: 'BENCHMARKS' }].map(o => (
+            <TouchableOpacity key={o.k} onPress={() => setView(o.k)}
+              style={{ flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center',
+                backgroundColor: view === o.k ? accentColor : t.bg4, borderWidth: 1.5, borderColor: view === o.k ? accentColor : t.border }}>
+              <Text style={{ fontSize: t.fs(11), fontWeight: '900', letterSpacing: 1, color: view === o.k ? '#fff' : t.text3 }}>{o.l}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
         {/* TABS */}
+        {view === 'rm' && (
         <View style={{ flexDirection: 'row', marginTop: 16, gap: 8 }}>
           {CATEGORY_NAMES.map(name => {
             const isActive = name === activeCategory;
@@ -235,8 +251,12 @@ export default function RMScreen() {
             );
           })}
         </View>
+        )}
       </View>
 
+      {view === 'bench' ? (
+        <BenchmarksView resultados={resultados} wodsLibres={wodsLibres} genero={userProfile?.genero} accentColor={accentColor} />
+      ) : (
       <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 60 }}>
         {category.movements.map((mv) => {
           const isOpen  = expanded === mv.key;
@@ -514,6 +534,7 @@ export default function RMScreen() {
           );
         })}
       </ScrollView>
+      )}
     </View>
   );
 }

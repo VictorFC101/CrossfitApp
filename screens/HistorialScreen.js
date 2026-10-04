@@ -8,6 +8,9 @@ import { MOVEMENTS_DB, CATEGORIES, CATEGORY_COLORS } from '../movements_db';
 import { RM_NAMES, TYPE_COLORS as SHARED_TYPE_COLORS } from '../constants';
 import { parseDateFromDay } from '../dateUtils';
 import { parsePercent } from '../wodLogic';
+import { BENCHMARKS, getBenchmark } from '../benchmarks';
+import { detectBenchmark, getBenchmarkHistory, evaluateNewMark } from '../benchmarkLogic';
+import BenchmarkCard from './BenchmarkCard';
 
 const rmNames = RM_NAMES;
 
@@ -384,6 +387,9 @@ function MovementPicker({ visible, onClose, onSelect }) {
 
 function WodCreator({ visible, onClose, onSave }) {
   const t = useTheme();
+  const { resultados, wodsLibres } = useApp();
+  const [benchmarkKey, setBenchmarkKey] = useState(null);
+  const [rx, setRx] = useState(true);
   const [nombre, setNombre] = useState('');
   const [tipo, setTipo] = useState('AMRAP');
   const [duracion, setDuracion] = useState('20');
@@ -405,6 +411,20 @@ function WodCreator({ visible, onClose, onSave }) {
     setMovimientos(prev => prev.filter((_, i) => i !== idx));
   };
 
+  // Elegir benchmark pre-rellena nombre y tipo; "Ninguno" lo quita
+  const pickBenchmark = (key) => {
+    setBenchmarkKey(key);
+    const bm = getBenchmark(key);
+    if (bm) { setNombre(bm.nombre); setTipo(bm.tipo); }
+  };
+
+  // Escribir un nombre reconocido marca el benchmark automáticamente
+  const onChangeNombre = (v) => {
+    setNombre(v);
+    const k = detectBenchmark(v);
+    if (k) { setBenchmarkKey(k); setTipo(getBenchmark(k).tipo); }
+  };
+
   const handleSave = () => {
     if (!nombre.trim()) return;
     const wod = {
@@ -417,16 +437,20 @@ function WodCreator({ visible, onClose, onSave }) {
       notas,
       fecha: new Date().toISOString(),
       libre: true,
+      rx,
+      benchmark_key: benchmarkKey,
     };
     onSave(wod);
     setNombre(''); setTipo('AMRAP'); setDuracion('20');
     setMovimientos([]); setResultado(''); setNotas('');
+    setBenchmarkKey(null); setRx(true);
     onClose();
   };
 
   const reset = () => {
     setNombre(''); setTipo('AMRAP'); setDuracion('20');
     setMovimientos([]); setResultado(''); setNotas('');
+    setBenchmarkKey(null); setRx(true);
   };
 
   return (
@@ -445,10 +469,39 @@ function WodCreator({ visible, onClose, onSave }) {
 
         <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 80 }}>
 
+          {/* BENCHMARK (opcional) */}
+          <View style={{ marginBottom: 14 }}>
+            <Text style={{ fontSize: t.fs(10), color: t.accent, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>BENCHMARK (OPCIONAL)</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+              {[{ key: null, nombre: 'Ninguno' }, ...BENCHMARKS].map(b => {
+                const active = benchmarkKey === b.key;
+                return (
+                  <TouchableOpacity key={b.key || 'none'} onPress={() => pickBenchmark(b.key)}
+                    style={{ paddingHorizontal: 14, paddingVertical: 8, backgroundColor: active ? t.accent + '20' : t.card, borderWidth: 1, borderColor: active ? t.accent : t.border, borderRadius: 8 }}>
+                    <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: active ? t.accent : t.text2 }}>{b.nombre}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            {benchmarkKey && (
+              <View style={{ marginTop: 10 }}>
+                <BenchmarkCard benchmarkKey={benchmarkKey} resultados={resultados} wodsLibres={wodsLibres} />
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {[{ v: true, l: 'Rx' }, { v: false, l: 'Scaled' }].map(o => (
+                    <TouchableOpacity key={o.l} onPress={() => setRx(o.v)}
+                      style={{ paddingHorizontal: 14, paddingVertical: 8, backgroundColor: rx === o.v ? t.accent + '20' : t.card, borderWidth: 1, borderColor: rx === o.v ? t.accent : t.border, borderRadius: 8 }}>
+                      <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: rx === o.v ? t.accent : t.text2 }}>{o.l}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
+
           {/* NOMBRE */}
           <View style={{ marginBottom: 14 }}>
             <Text style={{ fontSize: t.fs(10), color: t.accent, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>NOMBRE DEL WOD</Text>
-            <TextInput value={nombre} onChangeText={setNombre}
+            <TextInput value={nombre} onChangeText={onChangeNombre}
               placeholder="Ej: Murph, Cindy, WOD martes..."
               placeholderTextColor={t.text3}
               style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.accent + '40', borderRadius: 10, color: t.text, fontSize: t.fs(16), fontWeight: '700', padding: 14 }} />
@@ -641,13 +694,28 @@ export default function HistorialScreen() {
       });
     });
 
+  const [markMsg, setMarkMsg] = useState(null);
   const handleSaveWodLibre = (wod) => {
-  saveWodLibre(wod);
+    // Comparar con el historial previo del benchmark antes de guardar
+    const bm = getBenchmark(wod.benchmark_key);
+    const evalMark = bm
+      ? evaluateNewMark(wod, getBenchmarkHistory(bm.key, resultados, wodsLibres), bm.scoring)
+      : null;
+    saveWodLibre(wod);
+    if (evalMark) {
+      setMarkMsg(evalMark.message);
+      setTimeout(() => setMarkMsg(null), 3000);
+    }
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       <WodCreator visible={showCreator} onClose={() => setShowCreator(false)} onSave={handleSaveWodLibre} />
+      {markMsg && (
+        <View style={{ backgroundColor: t.accent + '20', borderBottomWidth: 1, borderBottomColor: t.accent, padding: 10 }}>
+          <Text style={{ fontSize: t.fs(13), color: t.accent, fontWeight: '900', textAlign: 'center' }}>{markMsg}</Text>
+        </View>
+      )}
       <EditResultModal
         visible={!!editingDay}
         day={editingDay}
