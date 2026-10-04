@@ -1,7 +1,7 @@
 # Pagos con Stripe (modo test)
 
 Funciones: `create-checkout`, `stripe-webhook`, `create-portal-session`.
-Migración: `supabase/migrations/015_pagos_stripe.sql` (tablas `productos`, `producto_variantes`, `planes`, `clientes_stripe`, `pedidos`, `pedido_items`, `suscripciones`, `pagos` + RLS).
+Migración: `supabase/migrations/016_pagos_stripe.sql` (tablas `productos`, `producto_variantes`, `planes`, `clientes_stripe`, `pedidos`, `pedido_items`, `suscripciones`, `pagos` + RLS).
 
 ## 1. Secrets
 
@@ -18,7 +18,7 @@ supabase secrets set \
 ## 2. Migración y despliegue
 
 ```bash
-supabase db push                                   # aplica 015_pagos_stripe.sql
+supabase db push                                   # aplica 016_pagos_stripe.sql
 supabase functions deploy create-checkout
 supabase functions deploy create-portal-session
 supabase functions deploy stripe-webhook --no-verify-jwt   # Stripe no envía JWT

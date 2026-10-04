@@ -1,4 +1,4 @@
--- 015: Sistema de pagos (Stripe) — tienda (productos/pedidos) y planes (suscripciones)
+-- 016: Sistema de pagos (Stripe) — tienda (productos/pedidos) y planes (suscripciones)
 --
 -- Las tablas de dinero (pedidos, pedido_items, suscripciones, pagos, clientes_stripe)
 -- solo se escriben desde Edge Functions con service role (create-checkout, stripe-webhook).

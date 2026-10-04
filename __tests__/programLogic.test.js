@@ -108,6 +108,11 @@ describe('programLogic', () => {
   });
 
   describe('isNetworkError', () => {
+    it('detecta los errores de expo/fetch (fetch global desde SDK 56)', () => {
+      expect(isNetworkError(new Error('fetch failed: The operation was aborted.'))).toBe(true);
+      expect(isNetworkError(new Error('fetch failed: Error: The Internet connection appears to be offline.'))).toBe(true);
+    });
+
     it('detecta errores de red por mensaje', () => {
       expect(isNetworkError({ message: 'Network request failed' })).toBe(true);
       expect(isNetworkError({ message: 'fetch failed' })).toBe(true);

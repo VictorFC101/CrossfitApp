@@ -184,13 +184,13 @@ export function AppProvider({ children }) {
       // Cargar resultados desde Supabase (fuente de verdad)
       const { data: resData } = await supabase
         .from('resultados')
-        .select('dia, resultado, notas, fecha, rx, adaptacion, partes')
+        .select('dia, resultado, notas, fecha, rx, adaptacion, partes, benchmark_key')
         .eq('user_id', uid)
         .order('fecha', { ascending: false, nullsFirst: false })
         .limit(365);
       if (resData?.length) {
         const resMap = {};
-        resData.forEach(r => { resMap[r.dia] = { resultado: r.resultado, notas: r.notas, fecha: r.fecha, rx: r.rx !== false, adaptacion: r.adaptacion || null, partes: r.partes || null }; });
+        resData.forEach(r => { resMap[r.dia] = { resultado: r.resultado, notas: r.notas, fecha: r.fecha, rx: r.rx !== false, adaptacion: r.adaptacion || null, partes: r.partes || null, benchmark_key: r.benchmark_key || null }; });
         setResultados(prev => ({ ...prev, ...resMap }));
         await AsyncStorage.setItem(STORAGE_KEYS.USER_RESULTADOS, JSON.stringify({ ...resMap }));
       }
@@ -384,6 +384,9 @@ export function AppProvider({ children }) {
   };
 
   const saveResultado = async (key, data) => {
+    // benchmark_key: si el llamador no lo indica (p. ej. edición desde Historial), conservar el del día
+    const benchmarkKey = data.benchmark_key !== undefined ? data.benchmark_key : (resultados[key]?.benchmark_key || null);
+    data = { ...data, benchmark_key: benchmarkKey };
     const updated = { ...resultados, [key]: data };
     setResultados(updated);
     try {
@@ -400,6 +403,7 @@ export function AppProvider({ children }) {
           rx: data.rx !== false,
           adaptacion: data.adaptacion || null,
           partes: data.partes || null,
+          benchmark_key: benchmarkKey,
         }, { onConflict: 'user_id,dia' });
         if (resErr) console.warn('saveResultado: error guardando en resultados', resErr.message);
         // Publicar en feed social — eliminar entrada anterior del mismo día antes de insertar
@@ -435,6 +439,7 @@ export function AppProvider({ children }) {
           notas: wod.notas,
           publico: true,
           fecha: wod.fecha,
+          benchmark_key: wod.benchmark_key || null,
         });
         await supabase.from('feed_actividad').insert({
           user_id: user.id,

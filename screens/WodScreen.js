@@ -1,18 +1,18 @@
-import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Modal, Platform, Alert } from 'react-native';
-import { useState, useEffect, useRef } from 'react';
-// react-native-view-shot y expo-sharing no tienen implementación web útil
-// (captura/compartir imagen no disponible en navegador) — se cargan solo en nativo.
-const ViewShot = Platform.OS !== 'web' ? require('react-native-view-shot').default : View;
-const Sharing = Platform.OS !== 'web' ? require('expo-sharing') : null;
+import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
+import { useState, useEffect } from 'react';
 import { useApp } from '../AppContext';
 import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { getTodayDay, isTodayInProgram, formatDateShort, getToday } from '../dateUtils';
 import { useToday } from '../hooks/useToday';
+import { useShareResult } from '../hooks/useShareResult';
+import { fromProgramDay } from '../shareResultLogic';
 import { RM_CATEGORIES } from '../constants';
+import { getBenchmark } from '../benchmarks';
+import { detectDayBenchmark, getBenchmarkHistory, evaluateNewMark } from '../benchmarkLogic';
+import BenchmarkCard from './BenchmarkCard';
 import { RM_KEY_NAMES, RM_NAME_PATTERNS, inferRmKeysFromText, getEffectiveRM, parsePercent } from '../wodLogic';
 
-const MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
 const TYPE_COLORS = {
   'endurance extra': '#f77f00',
@@ -31,130 +31,6 @@ function typeColor(type, fallback) {
     if (key.includes(k)) return v;
   }
   return fallback;
-}
-
-// ── Tarjeta de resultados para compartir ──────────────────────
-function ShareCard({ day, resultado, notas, rx, acento }) {
-  const now = new Date();
-  const dateStr = `${now.getDate()} ${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
-
-  // Parsear resultado — solo aceptar formatos estrictos
-  const segs = (resultado || '').split(' · ');
-  const timePart   = segs.find(s => /^\d{1,2}:\d{2}$/.test(s.trim())) || '';
-  const roundsSeg  = segs.find(s => /^\d+\+\d+$/.test(s.trim())) || '';
-  const [ron, rep] = roundsSeg ? roundsSeg.split('+') : ['', ''];
-  const hasBoth    = !!(timePart && roundsSeg);
-  const hasNone    = !timePart && !roundsSeg;
-
-  // Movimientos: soporta movements, parts y emomMinutes
-  const movements = (() => {
-    if (day?.wod?.movements) return day.wod.movements.filter(m => m.name !== '—').slice(0, 5);
-    if (day?.wod?.parts) {
-      const all = day.wod.parts.flatMap(p => p.movements?.filter(m => m.name !== '—') || []);
-      return all.slice(0, 5);
-    }
-    if (day?.wod?.emomMinutes) return day.wod.emomMinutes.slice(0, 5).map(m => ({ reps: m.min, name: m.work }));
-    return [];
-  })();
-
-  return (
-    <View style={{ width: 320, backgroundColor: '#0a0a12', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: acento + '40' }}>
-
-      {/* Cabecera */}
-      <View style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={{ fontSize: 18 }}>⚡</Text>
-          <Text style={{ fontSize: 18, fontWeight: '900', color: '#fff', letterSpacing: 3 }}>WODLY</Text>
-        </View>
-        <Text style={{ fontSize: 11, color: '#ffffff45' }}>{dateStr}</Text>
-      </View>
-
-      {/* Línea acento */}
-      <View style={{ height: 2, backgroundColor: acento + '70', marginHorizontal: 20, borderRadius: 1 }} />
-
-      {/* Día + tipo */}
-      <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 10 }}>
-        <Text style={{ fontSize: 14, fontWeight: '900', color: '#fff', letterSpacing: 1, marginBottom: 3 }}>
-          {(day?.label || day?.day || '').toUpperCase()}
-        </Text>
-        {(day?.wod?.type || day?.type) && (
-          <Text style={{ fontSize: 10, color: '#ffffff50', letterSpacing: 1 }}>
-            {[day?.wod?.type, day?.wod?.duration, day?.type?.toUpperCase()].filter(Boolean).join(' · ')}
-          </Text>
-        )}
-      </View>
-
-      {/* Movimientos */}
-      {movements.length > 0 && (
-        <View style={{ paddingHorizontal: 20, paddingBottom: 14, gap: 5 }}>
-          {movements.map((m, i) => (
-            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#ffffff08', borderLeftWidth: 2, borderLeftColor: acento, borderRadius: 6, paddingVertical: 5, paddingHorizontal: 10 }}>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: acento, minWidth: 32 }}>{m.reps}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 12, fontWeight: '600', color: '#fff' }} numberOfLines={1}>{m.name}</Text>
-                {m.weight && m.weight !== 'BW' && (
-                  <Text style={{ fontSize: 10, color: '#ffffff55', fontWeight: '600', marginTop: 2 }}>{m.weight}</Text>
-                )}
-              </View>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {/* Separador */}
-      <View style={{ height: 1, backgroundColor: '#ffffff12', marginHorizontal: 20, marginBottom: 16 }} />
-
-      {/* Bloques resultado — siempre ambos, apilados */}
-      <View style={{ paddingHorizontal: 20, paddingBottom: 14, gap: 8 }}>
-
-        {/* TIEMPO */}
-        <View style={{ backgroundColor: acento + '12', borderWidth: 1, borderColor: acento + '30', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}>
-          <Text style={{ fontSize: 34, fontWeight: '900', color: timePart ? '#fff' : '#ffffff20', letterSpacing: 1 }} numberOfLines={1} adjustsFontSizeToFit>
-            {timePart || '—'}
-          </Text>
-          <Text style={{ fontSize: 9, color: acento, letterSpacing: 2, fontWeight: '700', marginTop: 6 }}>TIEMPO</Text>
-        </View>
-
-        {/* RONDAS + REPS */}
-        <View style={{ backgroundColor: acento + '12', borderWidth: 1, borderColor: acento + '30', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}>
-          {roundsSeg ? (
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4 }}>
-              <Text style={{ fontSize: 34, fontWeight: '900', color: '#fff' }} numberOfLines={1}>{ron}</Text>
-              <Text style={{ fontSize: 20, fontWeight: '700', color: '#ffffff55', paddingBottom: 4 }} numberOfLines={1}>+{rep}</Text>
-            </View>
-          ) : (
-            <Text style={{ fontSize: 34, fontWeight: '900', color: '#ffffff20' }}>—</Text>
-          )}
-          <Text style={{ fontSize: 9, color: acento, letterSpacing: 2, fontWeight: '700', marginTop: 6 }}>RONDAS + REPS</Text>
-        </View>
-
-        {/* Rx / Scaled */}
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: rx ? '#52b78815' : '#f4a26115', borderWidth: 1, borderColor: rx ? '#52b78855' : '#f4a26155', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 }}>
-            <Text style={{ fontSize: 11, fontWeight: '900', color: rx ? '#52b788' : '#f4a261', letterSpacing: 1 }}>{rx ? '✓ Rx' : '⚡ Scaled'}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Notas */}
-      {!!notas && (
-        <>
-          <View style={{ height: 1, backgroundColor: '#ffffff10', marginHorizontal: 20 }} />
-          <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
-            <Text style={{ fontSize: 11, color: '#ffffff55', fontStyle: 'italic', lineHeight: 17 }} numberOfLines={2}>"{notas}"</Text>
-          </View>
-        </>
-      )}
-
-      {/* Footer */}
-      <View style={{ height: 1, backgroundColor: '#ffffff08', marginHorizontal: 20 }} />
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }}>
-        <View style={{ flex: 1, height: 1, backgroundColor: '#ffffff08', marginLeft: 20 }} />
-        <Text style={{ fontSize: 9, color: '#ffffff25', letterSpacing: 4, fontWeight: '700', marginHorizontal: 10 }}>WODLY.APP</Text>
-        <View style={{ flex: 1, height: 1, backgroundColor: '#ffffff08', marginRight: 20 }} />
-      </View>
-    </View>
-  );
 }
 
 // ── Tira de progresión — últimos 4 resultados del mismo movimiento ─────────────────
@@ -457,7 +333,7 @@ function detectFormat(wod) {
 
 // ─────────────────────────────────────────────────────────────
 export default function WodScreen({ navigate }) {
-  const { rms, resultados, saveResultado, partnerProfile, partnerResultados } = useApp();
+  const { rms, resultados, saveResultado, wodsLibres, partnerProfile, partnerResultados } = useApp();
   const t = useTheme();
   const { activeProgram } = useProgram();
   const todayKey = useToday(); // fuerza re-render al cambiar de día
@@ -469,11 +345,11 @@ export default function WodScreen({ navigate }) {
   const [minutos, setMinutos]     = useState('');
   const [segundos, setSegundos]   = useState('');
   const [saved, setSaved]         = useState(false);
-  const [sharing, setSharing]     = useState(false);
+  const [markMsg, setMarkMsg]     = useState(null); // comparación con la última vez tras guardar
   const [adaptacion, setAdaptacion] = useState(null);
   const [showAdaptModal, setShowAdaptModal] = useState(false);
   const [partResults, setPartResults] = useState({});
-  const shareCardRef              = useRef(null);
+  const { share, sharing, ShareHost } = useShareResult({ acento: t.accent });
 
   const allDaysFlat = activeProgram
     ? activeProgram.weeks.flatMap(w => w.days)
@@ -483,6 +359,7 @@ export default function WodScreen({ navigate }) {
 
   const savedResult = day ? resultados[day.day] : null;
   const dayParts = getDayParts(day);
+  const dayBenchmark = detectDayBenchmark(day);
 
   useEffect(() => {
     setNotas(savedResult?.notas || '');
@@ -552,27 +429,23 @@ export default function WodScreen({ navigate }) {
     const timePart   = minutos ? `${minutos.padStart(2,'0')}:${(segundos||'00').padStart(2,'0')}` : '';
     const roundsPart = rondas  ? `${rondas}+${repsExtra || '0'}` : '';
     const finalResultado = [roundsPart, timePart].filter(Boolean).join(' · ') || resultado;
-    await saveResultado(day.day, { resultado: finalResultado, notas, fecha: new Date().toISOString(), rx, adaptacion });
+    // Evaluar contra el historial previo (sin el propio día) antes de guardar
+    const bm = getBenchmark(dayBenchmark);
+    const evalMark = bm
+      ? evaluateNewMark({ resultado: finalResultado, rx }, getBenchmarkHistory(bm.key, resultados, wodsLibres, { excludeDia: day.day }), bm.scoring)
+      : null;
+    await saveResultado(day.day, { resultado: finalResultado, notas, fecha: new Date().toISOString(), rx, adaptacion, benchmark_key: dayBenchmark });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+    if (evalMark) {
+      setMarkMsg(evalMark.message);
+      setTimeout(() => setMarkMsg(null), 3000);
+    }
   };
 
-  const compartir = async () => {
-    if (Platform.OS === 'web') {
-      Alert.alert('No disponible', 'Compartir el resultado como imagen no está disponible en la versión web.');
-      return;
-    }
-    if (!currentResult || !shareCardRef.current) return;
-    setSharing(true);
-    try {
-      const uri = await shareCardRef.current.capture();
-      await Sharing.shareAsync(uri, {
-        mimeType: 'image/png',
-        dialogTitle: 'Compartir resultado WOD',
-      });
-    } catch (_) {}
-    setSharing(false);
-  };
+  const compartir = () => share(
+    currentResult ? fromProgramDay(adaptedDay, { resultado: currentResult, notas, rx, partes: savedResult?.partes }) : null
+  );
 
   const today   = getToday();
   const LABEL_TO_RMKEY = { 'back squat': 'bs', 'front squat': 'fs', 'deadlift': 'dl', 'strict press': 'sp', 'push press': 'sp', 'snatch': 'sn', 'clean': 'cj' };
@@ -637,11 +510,7 @@ export default function WodScreen({ navigate }) {
       />
 
       {/* ShareCard renderizada fuera de pantalla para captura */}
-      <View style={{ position: 'absolute', top: 0, left: -400 }} collapsable={false}>
-        <ViewShot ref={shareCardRef} options={{ format: 'png', quality: 0.95, result: 'tmpfile' }}>
-          <ShareCard day={adaptedDay} resultado={currentResult} notas={notas} rx={rx} acento={t.accent} />
-        </ViewShot>
-      </View>
+      <ShareHost />
 
       <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -939,6 +808,13 @@ export default function WodScreen({ navigate }) {
             <Text style={{ fontSize: t.fs(10), color: '#4caf50', letterSpacing: 2, fontWeight: '700' }}>✏️ ANOTAR RESULTADO</Text>
             {saved && <Text style={{ fontSize: t.fs(10), color: '#52b788', fontWeight: '700' }}>✓ GUARDADO</Text>}
           </View>
+
+          {dayBenchmark && (
+            <BenchmarkCard benchmarkKey={dayBenchmark} resultados={resultados} wodsLibres={wodsLibres} excludeDia={day.day} />
+          )}
+          {markMsg && (
+            <Text style={{ fontSize: t.fs(13), color: t.accent, fontWeight: '900', marginBottom: 12 }}>{markMsg}</Text>
+          )}
 
           {/* Rx / Scaled */}
           <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>

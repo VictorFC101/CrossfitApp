@@ -7,12 +7,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0a0a12"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.victor.wodly"
@@ -22,7 +16,6 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0a0a12"
       },
-      "edgeToEdgeEnabled": true,
       "package": "com.victor.wodly",
       "versionCode": 1
     },
@@ -40,6 +33,19 @@
     },
     "updates": {
       "url": "https://u.expo.dev/abce4203-fc54-4dc8-9646-c11af1967ae1"
-    }
+    },
+    "plugins": [
+      "expo-sharing",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0a0a12",
+          "imageWidth": 200
+        }
+      ]
+    ]
   }
 }
