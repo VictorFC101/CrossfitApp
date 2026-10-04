@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from './constants';
 import { plan as legacyDefaultPlan } from './data';
 import { parseDateFromDay } from './dateUtils';
 import { supabase } from './supabase';
@@ -73,13 +74,13 @@ export function ProgramProvider({ children }) {
   };
 
   const readCachedPrograms = async () => {
-    const stored = await AsyncStorage.getItem('all_programs');
+    const stored = await AsyncStorage.getItem(STORAGE_KEYS.ALL_PROGRAMS);
     let allPrograms = stored ? JSON.parse(stored) : [];
 
     // Migración: eliminar el programa por defecto antiguo (Marzo 2026)
     if (allPrograms.some(p => p.id === 'default' && p.weeks?.[0]?.days?.[0]?.day?.includes('30 Mar'))) {
       allPrograms = allPrograms.filter(p => p.id !== 'default');
-      await AsyncStorage.setItem('all_programs', JSON.stringify(allPrograms));
+      await AsyncStorage.setItem(STORAGE_KEYS.ALL_PROGRAMS, JSON.stringify(allPrograms));
     }
     return allPrograms;
   };
@@ -108,7 +109,7 @@ export function ProgramProvider({ children }) {
 
       if (remoteRows?.length) {
         const allPrograms = remoteRows.map(rowToProgram);
-        await AsyncStorage.setItem('all_programs', JSON.stringify(allPrograms));
+        await AsyncStorage.setItem(STORAGE_KEYS.ALL_PROGRAMS, JSON.stringify(allPrograms));
         setPrograms(allPrograms.map(enrichProgram));
         return;
       }
@@ -128,7 +129,7 @@ export function ProgramProvider({ children }) {
 
   const addProgram = async (newProgram) => {
     try {
-      const stored = await AsyncStorage.getItem('all_programs');
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.ALL_PROGRAMS);
       const existing = stored ? JSON.parse(stored) : [];
 
       // Verificar que no solape con programas existentes
@@ -169,7 +170,7 @@ export function ProgramProvider({ children }) {
 
       // Guardar en AsyncStorage como caché
       const updated = [...existing, withId];
-      await AsyncStorage.setItem('all_programs', JSON.stringify(updated));
+      await AsyncStorage.setItem(STORAGE_KEYS.ALL_PROGRAMS, JSON.stringify(updated));
       setPrograms(updated.map(enrichProgram));
       return { success: true };
     } catch (e) {
@@ -184,10 +185,10 @@ export function ProgramProvider({ children }) {
       await supabase.from('programas').delete().eq('id', id);
 
       // Eliminar de AsyncStorage
-      const stored = await AsyncStorage.getItem('all_programs');
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.ALL_PROGRAMS);
       const existing = stored ? JSON.parse(stored) : [];
       const updated = existing.filter(p => p.id !== id);
-      await AsyncStorage.setItem('all_programs', JSON.stringify(updated));
+      await AsyncStorage.setItem(STORAGE_KEYS.ALL_PROGRAMS, JSON.stringify(updated));
       setPrograms(updated.map(enrichProgram));
       return { success: true };
     } catch (e) {
@@ -197,7 +198,7 @@ export function ProgramProvider({ children }) {
 
   const updateProgram = async (id, updatedProgram) => {
     try {
-      const stored = await AsyncStorage.getItem('all_programs');
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.ALL_PROGRAMS);
       const existing = stored ? JSON.parse(stored) : [];
       const updated = existing.map(p => p.id === id ? updatedProgram : p);
 
@@ -213,7 +214,7 @@ export function ProgramProvider({ children }) {
         if (error) throw error;
       }
 
-      await AsyncStorage.setItem('all_programs', JSON.stringify(updated));
+      await AsyncStorage.setItem(STORAGE_KEYS.ALL_PROGRAMS, JSON.stringify(updated));
       setPrograms(updated.map(enrichProgram));
       return { success: true };
     } catch (e) {
@@ -223,12 +224,12 @@ export function ProgramProvider({ children }) {
 
   const replaceDefaultProgram = async (newPlan) => {
     try {
-      const stored = await AsyncStorage.getItem('all_programs');
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.ALL_PROGRAMS);
       const existing = stored ? JSON.parse(stored) : [];
       const updated = existing.map(p =>
         p.id === 'default' ? { ...newPlan, id: 'default' } : p
       );
-      await AsyncStorage.setItem('all_programs', JSON.stringify(updated));
+      await AsyncStorage.setItem(STORAGE_KEYS.ALL_PROGRAMS, JSON.stringify(updated));
       setPrograms(updated.map(enrichProgram));
       return { success: true };
     } catch (e) {

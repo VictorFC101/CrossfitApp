@@ -12,6 +12,7 @@ import { SocialProvider } from './SocialContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isAuthRetryableFetchError } from '@supabase/supabase-js';
 import { supabase, AUTH_STORAGE_KEY } from './supabase';
+import { migrateStorageKeys } from './storageMigration';
 
 import HomeScreen from './screens/HomeScreen';
 import WodScreen from './screens/WodScreen';
@@ -165,6 +166,16 @@ function AppInner() {
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
+  const [storageReady, setStorageReady] = useState(false);
+
+  // Migrar claves de AsyncStorage antes de montar los providers (ThemeContext las lee al montar)
+  useEffect(() => {
+    migrateStorageKeys().finally(() => setStorageReady(true));
+  }, []);
+
+  if (!storageReady) {
+    return <View style={{ flex: 1, backgroundColor: '#0a0a0a' }} />;
+  }
 
   return (
     <SafeAreaProvider>

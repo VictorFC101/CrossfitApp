@@ -1,6 +1,7 @@
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../constants';
 import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { parseDateFromDay } from '../dateUtils';
@@ -14,7 +15,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 const MESES_LARGOS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
-const ADMIN_PIN_KEY = 'admin_pin';
+const ADMIN_PIN_KEY = STORAGE_KEYS.ADMIN_PIN;
 
 const DIAS_ES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 const MESES_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];

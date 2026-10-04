@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from './constants';
 
 const ThemeContext = createContext();
 
@@ -35,10 +36,10 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const dm = await AsyncStorage.getItem('theme_dark');
-        const ak = await AsyncStorage.getItem('theme_accent');
-        const cc = await AsyncStorage.getItem('theme_custom');
-        const fs = await AsyncStorage.getItem('theme_fontscale');
+        const dm = await AsyncStorage.getItem(STORAGE_KEYS.THEME_DARK);
+        const ak = await AsyncStorage.getItem(STORAGE_KEYS.THEME_ACCENT);
+        const cc = await AsyncStorage.getItem(STORAGE_KEYS.THEME_CUSTOM);
+        const fs = await AsyncStorage.getItem(STORAGE_KEYS.THEME_FONTSCALE);
         if (dm !== null) setDarkMode(dm === 'true');
         if (ak) setAccentKey(ak);
         if (cc) setCustomColor(cc);
@@ -50,26 +51,26 @@ export function ThemeProvider({ children }) {
 
   const setDark = async (val) => {
     setDarkMode(val);
-    await AsyncStorage.setItem('theme_dark', String(val));
+    await AsyncStorage.setItem(STORAGE_KEYS.THEME_DARK, String(val));
   };
 
   const setAccent = async (key) => {
     setAccentKey(key);
     setCustomColor(null);
-    await AsyncStorage.setItem('theme_accent', key);
-    await AsyncStorage.removeItem('theme_custom');
+    await AsyncStorage.setItem(STORAGE_KEYS.THEME_ACCENT, key);
+    await AsyncStorage.removeItem(STORAGE_KEYS.THEME_CUSTOM);
   };
 
   const setCustom = async (color) => {
     setCustomColor(color);
     setAccentKey('custom');
-    await AsyncStorage.setItem('theme_custom', color);
-    await AsyncStorage.setItem('theme_accent', 'custom');
+    await AsyncStorage.setItem(STORAGE_KEYS.THEME_CUSTOM, color);
+    await AsyncStorage.setItem(STORAGE_KEYS.THEME_ACCENT, 'custom');
   };
 
   const setFontScale = async (scale) => {
     setFontScaleState(scale);
-    await AsyncStorage.setItem('theme_fontscale', String(scale));
+    await AsyncStorage.setItem(STORAGE_KEYS.THEME_FONTSCALE, String(scale));
   };
 
   const accent = customColor || ACCENTS.find(a => a.key === accentKey)?.color || '#e63946';

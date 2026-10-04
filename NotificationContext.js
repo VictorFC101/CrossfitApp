@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from './constants';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
@@ -85,8 +86,8 @@ export function NotificationProvider({ children }) {
 
   const loadReminderSettings = async () => {
     try {
-      const enabled = await AsyncStorage.getItem('@crossfit_reminder_enabled');
-      const hour = await AsyncStorage.getItem('@crossfit_reminder_hour');
+      const enabled = await AsyncStorage.getItem(STORAGE_KEYS.REMINDER_ENABLED);
+      const hour = await AsyncStorage.getItem(STORAGE_KEYS.REMINDER_HOUR);
       if (enabled === 'true') setReminderEnabled(true);
       if (hour) setReminderHour(parseInt(hour));
     } catch (e) {}
@@ -121,8 +122,8 @@ export function NotificationProvider({ children }) {
 
       setReminderEnabled(true);
       setReminderHour(hour);
-      await AsyncStorage.setItem('@crossfit_reminder_enabled', 'true');
-      await AsyncStorage.setItem('@crossfit_reminder_hour', String(hour));
+      await AsyncStorage.setItem(STORAGE_KEYS.REMINDER_ENABLED, 'true');
+      await AsyncStorage.setItem(STORAGE_KEYS.REMINDER_HOUR, String(hour));
     } catch (e) {}
   };
 
@@ -131,7 +132,7 @@ export function NotificationProvider({ children }) {
     try {
       await Notifications.cancelScheduledNotificationAsync(REMINDER_ID).catch(() => {});
       setReminderEnabled(false);
-      await AsyncStorage.setItem('@crossfit_reminder_enabled', 'false');
+      await AsyncStorage.setItem(STORAGE_KEYS.REMINDER_ENABLED, 'false');
     } catch (e) {}
   };
 

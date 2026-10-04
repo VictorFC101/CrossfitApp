@@ -12,7 +12,7 @@ import { useNotifications, REMINDER_HOURS } from '../NotificationContext';
 import { useSocial } from '../SocialContext';
 import { parseDateFromDay } from '../dateUtils';
 import { supabase } from '../supabase';
-import { RM_MOVEMENTS } from '../constants';
+import { RM_MOVEMENTS, STORAGE_KEYS } from '../constants';
 
 const movements = RM_MOVEMENTS;
 
@@ -76,17 +76,17 @@ export default function ProfileScreen() {
         if (userProfile?.avatar_url) {
           setFoto(userProfile.avatar_url);
         } else {
-          const f = await AsyncStorage.getItem('user_foto');
+          const f = await AsyncStorage.getItem(STORAGE_KEYS.USER_FOTO);
           if (f) setFoto(f);
         }
         // Nombre: Supabase como fuente principal, AsyncStorage como fallback
         if (userProfile?.nombre) {
           setNombre(userProfile.nombre);
         } else {
-          const n = await AsyncStorage.getItem('user_nombre');
+          const n = await AsyncStorage.getItem(STORAGE_KEYS.USER_NOMBRE);
           if (n) setNombre(n);
         }
-        const g = await AsyncStorage.getItem('user_genero');
+        const g = await AsyncStorage.getItem(STORAGE_KEYS.USER_GENERO);
         if (g) setGenero(g);
       } catch (e) {}
     };
@@ -95,8 +95,8 @@ export default function ProfileScreen() {
 
   const guardarPerfil = async () => {
     try {
-      await AsyncStorage.setItem('user_nombre', nombre);
-      await AsyncStorage.setItem('user_genero', genero);
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_NOMBRE, nombre);
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_GENERO, genero);
       // Sincronizar nombre con Supabase
       if (userProfile?.id) {
         await supabase.from('usuarios').update({ nombre }).eq('id', userProfile.id);
@@ -117,7 +117,7 @@ export default function ProfileScreen() {
     if (!result.canceled) {
       const uri = result.assets[0].uri;
       setFoto(uri); // preview inmediato
-      await AsyncStorage.setItem('user_foto', uri); // fallback garantizado
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_FOTO, uri); // fallback garantizado
       if (!userProfile?.id) return;
       try {
         const path = `${userProfile.id}/avatar.jpg`;
@@ -294,7 +294,7 @@ export default function ProfileScreen() {
             {[{ key: 'M', label: '♂ MASCULINO' }, { key: 'F', label: '♀ FEMENINO' }].map(g => (
               <TouchableOpacity
                 key={g.key}
-                onPress={async () => { setGenero(g.key); await AsyncStorage.setItem('user_genero', g.key); }}
+                onPress={async () => { setGenero(g.key); await AsyncStorage.setItem(STORAGE_KEYS.USER_GENERO, g.key); }}
                 style={{ flex: 1, padding: 12, backgroundColor: genero === g.key ? t.accent + '20' : t.bg4, borderWidth: 2, borderColor: genero === g.key ? t.accent : t.border, borderRadius: 8, alignItems: 'center' }}>
                 <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: genero === g.key ? t.accent : t.text2 }}>{g.label}</Text>
               </TouchableOpacity>

@@ -79,3 +79,25 @@ export const CACHE_KEYS = {
   USER_PROFILE: '@crossfit_user_profile',
   HAS_ASIGNACION: '@crossfit_has_asignacion',
 };
+
+// Todas las claves de AsyncStorage de la app (siempre con prefijo @crossfit_).
+// No incluye la clave de sesión de Supabase (AUTH_STORAGE_KEY), que no debe cambiar.
+export const STORAGE_KEYS = {
+  USER_RMS: '@crossfit_user_rms',
+  USER_RESULTADOS: '@crossfit_user_resultados',
+  USER_WODS_LIBRES: '@crossfit_user_wods_libres',
+  USER_FOTO: '@crossfit_user_foto',
+  USER_NOMBRE: '@crossfit_user_nombre',
+  USER_GENERO: '@crossfit_user_genero',
+  ALL_PROGRAMS: '@crossfit_all_programs',
+  THEME_DARK: '@crossfit_theme_dark',
+  THEME_ACCENT: '@crossfit_theme_accent',
+  THEME_CUSTOM: '@crossfit_theme_custom',
+  THEME_FONTSCALE: '@crossfit_theme_fontscale',
+  ADMIN_PIN: '@crossfit_admin_pin',
+  ONBOARDING_DONE: '@crossfit_onboarding_done',
+  REMINDER_ENABLED: '@crossfit_reminder_enabled',
+  REMINDER_HOUR: '@crossfit_reminder_hour',
+  USER_PROFILE: CACHE_KEYS.USER_PROFILE,
+  HAS_ASIGNACION: CACHE_KEYS.HAS_ASIGNACION,
+};

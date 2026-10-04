@@ -2,7 +2,8 @@ import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
-import { CACHE_KEYS } from './constants';
+import { CACHE_KEYS, STORAGE_KEYS } from './constants';
+import { LEGACY_KEY_MAP } from './storageMigration';
 
 const AppContext = createContext();
 
@@ -53,10 +54,10 @@ export function AppProvider({ children }) {
 
   const loadLocalData = async () => {
     try {
-      const storedRms = await AsyncStorage.getItem('user_rms');
-      const storedResultados = await AsyncStorage.getItem('user_resultados');
-      const storedWods = await AsyncStorage.getItem('user_wods_libres');
-      const storedOnboarding = await AsyncStorage.getItem('@crossfit_onboarding_done');
+      const storedRms = await AsyncStorage.getItem(STORAGE_KEYS.USER_RMS);
+      const storedResultados = await AsyncStorage.getItem(STORAGE_KEYS.USER_RESULTADOS);
+      const storedWods = await AsyncStorage.getItem(STORAGE_KEYS.USER_WODS_LIBRES);
+      const storedOnboarding = await AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING_DONE);
       const storedProfile = await AsyncStorage.getItem(CACHE_KEYS.USER_PROFILE);
       // Perfil en caché: la app se pinta ya, sin esperar a las queries de red
       if (storedProfile && !hasProfileRef.current) {
@@ -98,7 +99,7 @@ export function AppProvider({ children }) {
       // Si Supabase no tiene onboarding_completed, usar AsyncStorage como fuente de verdad local
       let onboardingDone = privateData?.onboarding_completed;
       if (!onboardingDone) {
-        const local = await AsyncStorage.getItem('@crossfit_onboarding_done');
+        const local = await AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING_DONE);
         if (local === '1') {
           onboardingDone = true;
           // Reparar en Supabase en background
@@ -108,7 +109,7 @@ export function AppProvider({ children }) {
       // Supabase es la fuente de verdad: en un dispositivo nuevo no existe el flag local
       if (onboardingDone) {
         setOnboardingCompleted(true);
-        AsyncStorage.setItem('@crossfit_onboarding_done', '1').catch(() => {});
+        AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING_DONE, '1').catch(() => {});
       }
       if (data) {
         const profile = { ...data, ...(privateData || {}), onboarding_completed: onboardingDone };
@@ -168,7 +169,7 @@ export function AppProvider({ children }) {
         const rmsMap = {};
         rmsData.forEach(r => { rmsMap[r.movimiento] = String(r.peso); });
         setRms(prev => ({ ...prev, ...rmsMap }));
-        await AsyncStorage.setItem('user_rms', JSON.stringify({ ...rmsMap }));
+        await AsyncStorage.setItem(STORAGE_KEYS.USER_RMS, JSON.stringify({ ...rmsMap }));
       }
 
       // Cargar resultados desde Supabase (fuente de verdad)
@@ -182,7 +183,7 @@ export function AppProvider({ children }) {
         const resMap = {};
         resData.forEach(r => { resMap[r.dia] = { resultado: r.resultado, notas: r.notas, fecha: r.fecha, rx: r.rx !== false, adaptacion: r.adaptacion || null, partes: r.partes || null }; });
         setResultados(prev => ({ ...prev, ...resMap }));
-        await AsyncStorage.setItem('user_resultados', JSON.stringify({ ...resMap }));
+        await AsyncStorage.setItem(STORAGE_KEYS.USER_RESULTADOS, JSON.stringify({ ...resMap }));
       }
 
       // Canal Realtime: detectar cuando la solicitud enviada es aceptada
@@ -294,7 +295,7 @@ export function AppProvider({ children }) {
   };
 
   const completeOnboarding = async () => {
-    await AsyncStorage.setItem('@crossfit_onboarding_done', '1').catch(() => {});
+    await AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING_DONE, '1').catch(() => {});
     setOnboardingCompleted(true);
     setUserProfile(prev => prev ? { ...prev, onboarding_completed: true } : prev);
     try {
@@ -316,7 +317,8 @@ export function AppProvider({ children }) {
       setPartnerRequest(null);
       setSentPartnerRequest(null);
       hasProfileRef.current = false;
-      await AsyncStorage.multiRemove(['user_rms', 'user_resultados', 'user_wods_libres', 'user_nombre', 'user_genero', ...Object.values(CACHE_KEYS)]);
+      const legacyUserKeys = ['user_rms', 'user_resultados', 'user_wods_libres', 'user_nombre', 'user_genero'].filter(k => k in LEGACY_KEY_MAP);
+      await AsyncStorage.multiRemove([...legacyUserKeys, STORAGE_KEYS.USER_RMS, STORAGE_KEYS.USER_RESULTADOS, STORAGE_KEYS.USER_WODS_LIBRES, STORAGE_KEYS.USER_NOMBRE, STORAGE_KEYS.USER_GENERO, ...Object.values(CACHE_KEYS)]);
     } catch (e) {}
   };
 
@@ -324,7 +326,7 @@ export function AppProvider({ children }) {
     const updated = { ...rms, [key]: val };
     setRms(updated);
     try {
-      await AsyncStorage.setItem('user_rms', JSON.stringify(updated));
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_RMS, JSON.stringify(updated));
       // Sincronizar con Supabase
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -362,7 +364,7 @@ export function AppProvider({ children }) {
     const updated = { ...resultados, [key]: data };
     setResultados(updated);
     try {
-      await AsyncStorage.setItem('user_resultados', JSON.stringify(updated));
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_RESULTADOS, JSON.stringify(updated));
       // Sincronizar con Supabase
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -395,7 +397,7 @@ export function AppProvider({ children }) {
     const updated = [wod, ...wodsLibres];
     setWodsLibres(updated);
     try {
-      await AsyncStorage.setItem('user_wods_libres', JSON.stringify(updated));
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_WODS_LIBRES, JSON.stringify(updated));
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         await supabase.from('wods_libres').upsert({
@@ -423,7 +425,7 @@ export function AppProvider({ children }) {
     const updated = wodsLibres.filter(w => w.id !== id);
     setWodsLibres(updated);
     try {
-      await AsyncStorage.setItem('user_wods_libres', JSON.stringify(updated));
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_WODS_LIBRES, JSON.stringify(updated));
       await supabase.from('wods_libres').delete().eq('id', id);
     } catch (e) {}
   };
