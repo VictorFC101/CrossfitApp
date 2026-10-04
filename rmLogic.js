@@ -27,3 +27,45 @@ export function buildWeightTable(oneRM, pcts) {
   if (!Array.isArray(pcts)) return [];
   return pcts.map(p => ({ pct: p, pctLabel: Math.round(p * 100), weight: Math.round(oneRM * p) }));
 }
+
+// Convierte filas de la tabla rms ({movimiento, peso, reps, fecha}) en
+// { [movimiento]: { [reps]: 'peso' } }. Filas sin reps cuentan como 1RM.
+// Si llegan ordenadas por fecha ascendente, la última gana.
+export function buildRmsByReps(rows) {
+  const out = {};
+  if (!Array.isArray(rows)) return out;
+  rows.forEach(r => {
+    if (!r || !r.movimiento) return;
+    const reps = parseInt(r.reps) || 1;
+    if (!out[r.movimiento]) out[r.movimiento] = {};
+    out[r.movimiento][reps] = String(r.peso);
+  });
+  return out;
+}
+
+// Mejor 1RM estimado (Epley) a partir de los nRM (reps > 1) de un movimiento.
+// Usa la entrada con menos reps disponible (más fiable). null si no hay.
+export function bestEstimated1RM(byReps) {
+  if (!byReps) return null;
+  const reps = Object.keys(byReps).map(Number).filter(r => r > 1).sort((a, b) => a - b);
+  for (const r of reps) {
+    const kg = estimateOneRepMax(byReps[r], r);
+    if (kg) return { kg, fromReps: r };
+  }
+  return null;
+}
+
+// Etiqueta de marca: 1 -> '1RM', 3 -> '3RM'
+export function formatRmLabel(reps) {
+  return `${parseInt(reps) || 1}RM`;
+}
+
+// Valor de RM válido para guardar: número positivo y razonable (evita guardar "" o fragmentos sin sentido)
+export const RM_MAX_KG = 500;
+export function isValidRmInput(val) {
+  if (val === null || val === undefined) return false;
+  const s = String(val).trim().replace(',', '.');
+  if (!/^\d+(\.\d+)?$/.test(s)) return false;
+  const n = parseFloat(s);
+  return n > 0 && n <= RM_MAX_KG;
+}

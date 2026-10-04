@@ -4,11 +4,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { CACHE_KEYS, STORAGE_KEYS } from './constants';
 import { LEGACY_KEY_MAP } from './storageMigration';
+import { buildRmsByReps } from './rmLogic';
 
 const AppContext = createContext();
 
 export function AppProvider({ children }) {
   const [rms, setRms] = useState({});
+  const [rmsByReps, setRmsByReps] = useState({}); // { [movimiento]: { [reps]: 'peso' } }
   const [resultados, setResultados] = useState({});
   const [wodsLibres, setWodsLibres] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
@@ -66,6 +68,8 @@ export function AppProvider({ children }) {
         setLoadingProfile(false);
       }
       if (storedRms) setRms(JSON.parse(storedRms));
+      const storedRmsByReps = await AsyncStorage.getItem(STORAGE_KEYS.USER_RMS_BY_REPS);
+      if (storedRmsByReps) setRmsByReps(JSON.parse(storedRmsByReps));
       if (storedResultados) setResultados(JSON.parse(storedResultados));
       if (storedWods) setWodsLibres(JSON.parse(storedWods));
       if (storedOnboarding === '1') setOnboardingCompleted(true);
@@ -163,13 +167,18 @@ export function AppProvider({ children }) {
       // Cargar RMs desde Supabase (fuente de verdad)
       const { data: rmsData } = await supabase
         .from('rms')
-        .select('movimiento, peso')
-        .eq('user_id', uid);
+        .select('movimiento, peso, reps, fecha')
+        .eq('user_id', uid)
+        .order('fecha', { ascending: true });
       if (rmsData?.length) {
+        // rms = solo 1RM (lo usan los % y kg del WOD); rmsByReps = todas las marcas
+        const byReps = buildRmsByReps(rmsData);
         const rmsMap = {};
-        rmsData.forEach(r => { rmsMap[r.movimiento] = String(r.peso); });
+        Object.keys(byReps).forEach(mov => { if (byReps[mov][1] != null) rmsMap[mov] = byReps[mov][1]; });
         setRms(prev => ({ ...prev, ...rmsMap }));
+        setRmsByReps(byReps);
         await AsyncStorage.setItem(STORAGE_KEYS.USER_RMS, JSON.stringify({ ...rmsMap }));
+        await AsyncStorage.setItem(STORAGE_KEYS.USER_RMS_BY_REPS, JSON.stringify(byReps));
       }
 
       // Cargar resultados desde Supabase (fuente de verdad)
@@ -309,6 +318,7 @@ export function AppProvider({ children }) {
     try {
       await supabase.auth.signOut();
       setRms({});
+      setRmsByReps({});
       setResultados({});
       setWodsLibres([]);
       setUserProfile(null);
@@ -318,43 +328,56 @@ export function AppProvider({ children }) {
       setSentPartnerRequest(null);
       hasProfileRef.current = false;
       const legacyUserKeys = ['user_rms', 'user_resultados', 'user_wods_libres', 'user_nombre', 'user_genero'].filter(k => k in LEGACY_KEY_MAP);
-      await AsyncStorage.multiRemove([...legacyUserKeys, STORAGE_KEYS.USER_RMS, STORAGE_KEYS.USER_RESULTADOS, STORAGE_KEYS.USER_WODS_LIBRES, STORAGE_KEYS.USER_NOMBRE, STORAGE_KEYS.USER_GENERO, ...Object.values(CACHE_KEYS)]);
+      await AsyncStorage.multiRemove([...legacyUserKeys, STORAGE_KEYS.USER_RMS, STORAGE_KEYS.USER_RMS_BY_REPS, STORAGE_KEYS.USER_RESULTADOS, STORAGE_KEYS.USER_WODS_LIBRES, STORAGE_KEYS.USER_NOMBRE, STORAGE_KEYS.USER_GENERO, ...Object.values(CACHE_KEYS)]);
     } catch (e) {}
   };
 
-  const saveRM = async (key, val) => {
-    const updated = { ...rms, [key]: val };
-    setRms(updated);
+  const saveRM = async (key, val, reps = 1) => {
+    // 1RM: actualiza rms (base de los % del WOD). nRM: solo rmsByReps.
+    const updatedByReps = { ...rmsByReps, [key]: { ...(rmsByReps[key] || {}), [reps]: val } };
+    setRmsByReps(updatedByReps);
+    const updated = reps === 1 ? { ...rms, [key]: val } : rms;
+    if (reps === 1) setRms(updated);
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_RMS, JSON.stringify(updated));
+      if (reps === 1) await AsyncStorage.setItem(STORAGE_KEYS.USER_RMS, JSON.stringify(updated));
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_RMS_BY_REPS, JSON.stringify(updatedByReps));
       // Sincronizar con Supabase
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const pesoNum = parseFloat(val);
         const fechaISO = new Date().toISOString();
-        await supabase.from('rms').upsert({
+        const { error: rmErr } = await supabase.from('rms').upsert({
           user_id: user.id,
           movimiento: key,
           peso: pesoNum,
           fecha: fechaISO,
-        });
+          reps,
+        }, { onConflict: 'user_id,movimiento,reps' });
+        if (rmErr) console.warn('saveRM: error guardando en rms', rmErr.message);
         // Historial acumulativo (nunca se sobreescribe)
-        await supabase.from('rms_historial').insert({
+        const { error: histErr } = await supabase.from('rms_historial').insert({
           user_id: user.id,
           movimiento: key,
           peso: pesoNum,
           fecha: fechaISO,
+          reps,
         });
-        // Feed social — reemplazar entrada anterior del mismo movimiento
-        await supabase.from('feed_actividad')
+        if (histErr) console.warn('saveRM: error guardando en rms_historial', histErr.message);
+        // Feed social — reemplazar entrada anterior del mismo movimiento y reps
+        let delQuery = supabase.from('feed_actividad')
           .delete()
           .eq('user_id', user.id)
           .eq('tipo', 'rm_nuevo')
           .filter('data->>movimiento', 'eq', key);
+        // Entradas antiguas sin reps cuentan como 1RM
+        delQuery = reps === 1
+          ? delQuery.or('data->>reps.is.null,data->>reps.eq.1')
+          : delQuery.filter('data->>reps', 'eq', String(reps));
+        await delQuery;
         await supabase.from('feed_actividad').insert({
           user_id: user.id,
           tipo: 'rm_nuevo',
-          data: { movimiento: key, peso: pesoNum },
+          data: { movimiento: key, peso: pesoNum, reps },
         });
       }
     } catch (e) {}
@@ -368,7 +391,7 @@ export function AppProvider({ children }) {
       // Sincronizar con Supabase
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await supabase.from('resultados').upsert({
+        const { error: resErr } = await supabase.from('resultados').upsert({
           user_id: user.id,
           dia: key,
           resultado: data.resultado,
@@ -377,7 +400,8 @@ export function AppProvider({ children }) {
           rx: data.rx !== false,
           adaptacion: data.adaptacion || null,
           partes: data.partes || null,
-        });
+        }, { onConflict: 'user_id,dia' });
+        if (resErr) console.warn('saveResultado: error guardando en resultados', resErr.message);
         // Publicar en feed social — eliminar entrada anterior del mismo día antes de insertar
         await supabase.from('feed_actividad')
           .delete()
@@ -437,7 +461,7 @@ export function AppProvider({ children }) {
 
   return (
     <AppContext.Provider value={{
-      rms, saveRM,
+      rms, rmsByReps, saveRM,
       resultados, saveResultado,
       wodsLibres, saveWodLibre, deleteWodLibre,
       userProfile, loadingProfile, loadUserProfile, onboardingCompleted,
