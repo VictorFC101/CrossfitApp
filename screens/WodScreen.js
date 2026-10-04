@@ -1,15 +1,11 @@
-import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Modal, Platform, Alert } from 'react-native';
-import { useState, useEffect, useRef } from 'react';
-// react-native-view-shot y expo-sharing no tienen implementación web útil
-// (captura/compartir imagen no disponible en navegador) — se cargan solo en nativo.
-const ViewShot = Platform.OS !== 'web' ? require('react-native-view-shot').default : View;
-const Sharing = Platform.OS !== 'web' ? require('expo-sharing') : null;
+import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
+import { useState, useEffect } from 'react';
 import { useApp } from '../AppContext';
 import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { getTodayDay, isTodayInProgram, formatDateShort, getToday } from '../dateUtils';
 import { useToday } from '../hooks/useToday';
-import ShareResultCard from '../ShareResultCard';
+import { useShareResult } from '../hooks/useShareResult';
 import { fromProgramDay } from '../shareResultLogic';
 import { RM_CATEGORIES } from '../constants';
 import { RM_KEY_NAMES, RM_NAME_PATTERNS, inferRmKeysFromText, getEffectiveRM, parsePercent } from '../wodLogic';
@@ -346,11 +342,10 @@ export default function WodScreen({ navigate }) {
   const [minutos, setMinutos]     = useState('');
   const [segundos, setSegundos]   = useState('');
   const [saved, setSaved]         = useState(false);
-  const [sharing, setSharing]     = useState(false);
   const [adaptacion, setAdaptacion] = useState(null);
   const [showAdaptModal, setShowAdaptModal] = useState(false);
   const [partResults, setPartResults] = useState({});
-  const shareCardRef              = useRef(null);
+  const { share, sharing, ShareHost } = useShareResult({ acento: t.accent });
 
   const allDaysFlat = activeProgram
     ? activeProgram.weeks.flatMap(w => w.days)
@@ -434,22 +429,9 @@ export default function WodScreen({ navigate }) {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const compartir = async () => {
-    if (Platform.OS === 'web') {
-      Alert.alert('No disponible', 'Compartir el resultado como imagen no está disponible en la versión web.');
-      return;
-    }
-    if (!currentResult || !shareCardRef.current) return;
-    setSharing(true);
-    try {
-      const uri = await shareCardRef.current.capture();
-      await Sharing.shareAsync(uri, {
-        mimeType: 'image/png',
-        dialogTitle: 'Compartir resultado WOD',
-      });
-    } catch (_) {}
-    setSharing(false);
-  };
+  const compartir = () => share(
+    currentResult ? fromProgramDay(adaptedDay, { resultado: currentResult, notas, rx, partes: savedResult?.partes }) : null
+  );
 
   const today   = getToday();
   const LABEL_TO_RMKEY = { 'back squat': 'bs', 'front squat': 'fs', 'deadlift': 'dl', 'strict press': 'sp', 'push press': 'sp', 'snatch': 'sn', 'clean': 'cj' };
@@ -514,11 +496,7 @@ export default function WodScreen({ navigate }) {
       />
 
       {/* ShareCard renderizada fuera de pantalla para captura */}
-      <View style={{ position: 'absolute', top: 0, left: -400 }} collapsable={false}>
-        <ViewShot ref={shareCardRef} options={{ format: 'png', quality: 0.95, result: 'tmpfile' }}>
-          <ShareResultCard shareable={fromProgramDay(adaptedDay, { resultado: currentResult, notas, rx, partes: savedResult?.partes })} acento={t.accent} />
-        </ViewShot>
-      </View>
+      <ShareHost />
 
       <View style={{ backgroundColor: t.header, borderBottomWidth: 2, borderBottomColor: t.accent, padding: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
