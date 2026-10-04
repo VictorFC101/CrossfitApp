@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,6 +27,7 @@ export function NotificationProvider({ children }) {
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [reminderHour, setReminderHour] = useState(7);
   const [pushToken, setPushToken] = useState(null);
+  const realtimeSubRef = useRef(null);
 
   useEffect(() => {
     registerForPushNotifications();
@@ -38,7 +39,10 @@ export function NotificationProvider({ children }) {
         subscribeToNotifications(session.user.id);
       }
     });
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      if (realtimeSubRef.current) supabase.removeChannel(realtimeSubRef.current);
+    };
   }, []);
 
   const registerForPushNotifications = async () => {
@@ -131,11 +135,11 @@ export function NotificationProvider({ children }) {
     } catch (e) {}
   };
 
-  let realtimeSub = null;
-
   const subscribeToNotifications = (userId) => {
-    if (realtimeSub) realtimeSub.unsubscribe();
-    realtimeSub = supabase
+    // Cada evento de auth con sesión (INITIAL_SESSION, TOKEN_REFRESHED...) vuelve a suscribir:
+    // hay que quitar el canal anterior del cliente, si no .channel() devuelve el ya suscrito y .on() lanza error
+    if (realtimeSubRef.current) supabase.removeChannel(realtimeSubRef.current);
+    realtimeSubRef.current = supabase
       .channel('notificaciones_' + userId)
       .on('postgres_changes', {
         event: 'INSERT',
