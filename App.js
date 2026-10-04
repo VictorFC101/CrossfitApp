@@ -9,6 +9,7 @@ import { ProgramProvider, useProgram } from './ProgramContext';
 import ErrorBoundary from './ErrorBoundary';
 import { NotificationProvider } from './NotificationContext';
 import { SocialProvider } from './SocialContext';
+import { PaymentProvider } from './PaymentContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isAuthRetryableFetchError } from '@supabase/supabase-js';
 import { supabase, AUTH_STORAGE_KEY } from './supabase';
@@ -95,6 +96,7 @@ function AppInner() {
   }
 
   return (
+    <PaymentProvider userId={session.user.id}>
     <SocialProvider>
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <StatusBar style={t.dark ? 'light' : 'dark'} />
@@ -161,6 +163,7 @@ function AppInner() {
         </View>
       </View>
     </SocialProvider>
+    </PaymentProvider>
   );
 }
 
