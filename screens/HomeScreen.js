@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CACHE_KEYS } from '../constants';
 import { parseDateFromDay, isToday, isPast, getInitialIdx, isTodayInProgram, getToday, assignDatesFromStart, daySyncKey } from '../dateUtils';
 import { useToday } from '../hooks/useToday';
-import { parsePercent } from '../wodLogic';
+import DayBlocks from '../components/DayBlocks';
 
 const DIAS = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
 
@@ -521,7 +521,7 @@ export default function HomeScreen({ navigate }) {
                     <Text style={{ fontSize: t.fs(7), color: '#fff', fontWeight: '900', letterSpacing: 2 }}>HOY</Text>
                   </View>
                 )}
-                <Text style={{ fontSize: t.fs(8), color: t.accent, letterSpacing: 3, fontWeight: '700' }}>{day.type.toUpperCase()}</Text>
+                <Text style={{ fontSize: t.fs(8), color: t.accent, letterSpacing: 3, fontWeight: '700' }}>{(day.type || 'Entrenamiento').toUpperCase()}</Text>
                 <Text style={{ fontSize: t.fs(20), fontWeight: '900', letterSpacing: 1, color: t.text, marginTop: 2 }}>{day.label}</Text>
                 <Text style={{ fontSize: t.fs(9), color: t.text2, marginTop: 4 }}>📅 {day.day}</Text>
               </View>
@@ -531,159 +531,21 @@ export default function HomeScreen({ navigate }) {
               </TouchableOpacity>
             </View>
 
-            {/* OPEN GYM */}
-            {day.type === 'Libre' && (
-              <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: '#f4a26130', borderRadius: 12, padding: 14, marginBottom: 8 }}>
-                <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: '#f4a261', letterSpacing: 2, marginBottom: 10 }}>🕊️ SESIÓN LIBRE</Text>
-                {day.wod.freeContent?.map((txt, i) => (
-                  <Text key={i} style={{ fontSize: t.fs(12), color: txt.startsWith('⚠️') ? '#f4a261' : t.text2, marginBottom: 8 }}>▸ {txt}</Text>
-                ))}
-              </View>
-            )}
-
-            {/* SECCIONES */}
-            {day.type !== 'Libre' && (
-              <>
-                {day.warmup?.length > 0 && (
-                  <Section title="🔥 CALENTAMIENTO" accent={t.accent}>
-                    {day.warmup.map((txt, i) => (
-                      <View key={i} style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                        <Text style={{ color: t.accent }}>▸</Text>
-                        <Text style={{ fontSize: t.fs(12), color: t.text2, flex: 1, lineHeight: t.fs(18) }}>{txt}</Text>
-                      </View>
-                    ))}
-                  </Section>
-                )}
-
-                {day.strength && (
-                  <Section title={`💪 FUERZA — ${day.strength.title}`} accent={t.accent} defaultOpen={true}>
-                    {(day.strength.sets || []).map((s, i) => {
-                      const p = parsePercent(s.desc);
-                      return (
-                        <View key={i} style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 10, marginBottom: 7 }}>
-                          <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <View style={{ width: 20, height: 20, borderRadius: 4, backgroundColor: t.accent + '20', alignItems: 'center', justifyContent: 'center' }}>
-                              <Text style={{ fontSize: t.fs(9), color: t.accent, fontWeight: '700' }}>{i + 1}</Text>
-                            </View>
-                            <View style={{ flex: 1 }}>
-                              <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{s.desc}</Text>
-                              {s.note && <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 2 }}>{s.note}</Text>}
-                              {p && <View style={{ marginTop: 5, height: 2, backgroundColor: t.border, borderRadius: 1 }}><View style={{ height: 2, width: `${p}%`, backgroundColor: t.accent, borderRadius: 1 }} /></View>}
-                            </View>
-                          </View>
-                        </View>
-                      );
-                    })}
-                    {day.strength.note && <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 4 }}>📝 {day.strength.note}</Text>}
-                  </Section>
-                )}
-
-                <Section title={`⚡ WOD${day.wod?.parts ? ' — DOBLE WOD' : day.wod?.type ? ` — ${day.wod.type} ${day.wod.duration || ''}` : ''}`} accent={t.accent} defaultOpen={true}>
-                  {/* WOD con múltiples partes */}
-                  {day.wod?.parts ? day.wod.parts.map((part, pi) => (
-                    <View key={pi} style={{ marginBottom: pi < day.wod.parts.length - 1 ? 14 : 0 }}>
-                      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                        <View style={{ backgroundColor: t.accent + '20', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 }}>
-                          <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: t.accent }}>WOD {pi + 1} · {part.type} · {part.duration}</Text>
-                        </View>
-                        {part.format && <View style={{ backgroundColor: t.bg4, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 }}>
-                          <Text style={{ fontSize: t.fs(9), color: t.text2 }}>{part.format}</Text>
-                        </View>}
-                      </View>
-                      {part.formatNote && (
-                        <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 8 }}>
-                          <Text style={{ fontSize: t.fs(11), color: t.text2 }}>{part.formatNote}</Text>
-                        </View>
-                      )}
-                      {part.movements?.filter(m => m.name !== '—').map((m, i) => (
-                        <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent, borderRadius: 8, padding: 10, marginBottom: 6 }}>
-                          <Text style={{ minWidth: 38, fontSize: t.fs(13), fontWeight: '700', color: t.accent }}>{m.reps}</Text>
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: t.fs(14), fontWeight: '700', color: t.text }}>{m.name}</Text>
-                            {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(10), color: t.text2, marginTop: 2 }}>{m.weight}</Text>}
-                          </View>
-                        </View>
-                      ))}
-                      {pi < day.wod.parts.length - 1 && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 }}>
-                          <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
-                          <Text style={{ fontSize: t.fs(9), color: t.text3, fontWeight: '700', letterSpacing: 2 }}>2 MIN DESCANSO</Text>
-                          <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
-                        </View>
-                      )}
-                    </View>
-                  )) : null}
-
-                  {/* WOD EMOM */}
-                  {!day.wod?.parts && day.wod?.emomMinutes && (
-                    <>
-                      {day.wod.formatNote && (
-                        <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 8 }}>
-                          <Text style={{ fontSize: t.fs(11), color: t.text2 }}>{day.wod.formatNote}</Text>
-                        </View>
-                      )}
-                      {day.wod.emomMinutes.map((min, i) => (
-                        <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent, borderRadius: 8, padding: 10, marginBottom: 6 }}>
-                          <Text style={{ minWidth: 52, fontSize: t.fs(10), fontWeight: '700', color: t.accent }}>{min.min}</Text>
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{min.work}</Text>
-                            {min.weight && min.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 2 }}>{min.weight}</Text>}
-                          </View>
-                        </View>
-                      ))}
-                    </>
-                  )}
-
-                  {/* WOD estándar con movements */}
-                  {!day.wod?.parts && !day.wod?.emomMinutes && (
-                    <>
-                      {day.wod?.formatNote && (
-                        <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 10 }}>
-                          <Text style={{ fontSize: t.fs(10), color: t.text2 }}>⚡ {day.wod.format} — {day.wod.formatNote}</Text>
-                        </View>
-                      )}
-                      {day.wod?.movements?.map((m, i) => (
-                        <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent, borderRadius: 8, padding: 10, marginBottom: 6 }}>
-                          <Text style={{ minWidth: 38, fontSize: t.fs(13), fontWeight: '700', color: t.accent }}>{m.reps}</Text>
-                          <View>
-                            <Text style={{ fontSize: t.fs(14), fontWeight: '700', color: t.text }}>{m.name}</Text>
-                            {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(10), color: t.text2, marginTop: 2 }}>{m.weight}</Text>}
-                          </View>
-                        </View>
-                      ))}
-                    </>
-                  )}
-
-                  {day.wod?.gymNote && (
-                    <View style={{ backgroundColor: t.dark ? '#080f08' : '#e8f5e9', borderWidth: 1, borderColor: t.dark ? '#1e3e1e' : '#c8e6c9', borderRadius: 6, padding: 8, marginTop: 4 }}>
-                      <Text style={{ fontSize: t.fs(11), color: '#5a9a5a' }}>💡 {day.wod.gymNote}</Text>
-                    </View>
-                  )}
-                  <TouchableOpacity onPress={() => navigate('TIMER')}
-                    style={{ backgroundColor: t.accent, borderRadius: 8, padding: 12, alignItems: 'center', marginTop: 10 }}>
-                    <Text style={{ color: '#fff', fontWeight: '900', fontSize: t.fs(13), letterSpacing: 1 }}>▶ INICIAR TIMER</Text>
-                  </TouchableOpacity>
+            {/* BLOQUES DEL DÍA (calentamiento, fuerza/lift, WOD, accesorios, libre...) */}
+            <DayBlocks
+              day={day}
+              renderSection={({ title, accent, children, key, block }) => (
+                <Section key={key} title={title} accent={accent} defaultOpen={block.kind !== 'warmup' && block.kind !== 'accessory'}>
+                  {children}
                 </Section>
-
-                {day.gymExtra && (
-                  <Section title="🤸 BLOQUE TÉCNICO POST-WOD" accent="#4caf50">
-                    <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: '#81c784', marginBottom: 4 }}>{day.gymExtra.title}</Text>
-                    <Text style={{ fontSize: t.fs(11), color: '#3e7a42', fontStyle: 'italic', marginBottom: 10 }}>🎯 {day.gymExtra.focus}</Text>
-                    {day.gymExtra.blocks.map((b, i) => (
-                      <View key={i} style={{ flexDirection: 'row', gap: 8, backgroundColor: t.dark ? '#080e0a' : '#e8f5e9', borderLeftWidth: 3, borderLeftColor: '#2e6e32', borderRadius: 6, padding: 10, marginBottom: 6 }}>
-                        <View style={{ width: 20, height: 20, borderRadius: 4, backgroundColor: t.dark ? '#0e2a12' : '#c8e6c9', alignItems: 'center', justifyContent: 'center' }}>
-                          <Text style={{ fontSize: t.fs(9), color: '#4caf50', fontWeight: '700' }}>{i + 1}</Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: '#81c784' }}>{b.label}</Text>
-                          <Text style={{ fontSize: t.fs(11), color: t.dark ? '#4a6a4e' : '#2e7d32', marginTop: 2, lineHeight: t.fs(16) }}>{b.detail}</Text>
-                        </View>
-                      </View>
-                    ))}
-                  </Section>
-                )}
-              </>
-            )}
+              )}
+              wodFooter={() => (
+                <TouchableOpacity onPress={() => navigate('TIMER')}
+                  style={{ backgroundColor: t.accent, borderRadius: 8, padding: 12, alignItems: 'center', marginTop: 10 }}>
+                  <Text style={{ color: '#fff', fontWeight: '900', fontSize: t.fs(13), letterSpacing: 1 }}>▶ INICIAR TIMER</Text>
+                </TouchableOpacity>
+              )}
+            />
           </View>
         )}
       </ScrollView>

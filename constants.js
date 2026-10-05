@@ -74,6 +74,57 @@ export const TYPE_COLORS = {
   Gimnásticos:   '#52b788',
 };
 
+// Tipos de día permitidos (formato de programa). Mantener aquí: no repetir literales.
+export const DAY_TYPES = ['Halterofilia', 'Fuerza', 'Powerlifting', 'Gimnásticos', 'Libre'];
+
+// Tipos de bloque de un día (schema v2)
+export const BLOCK_KINDS = ['warmup', 'strength', 'lift', 'wod', 'accessory', 'skill', 'free'];
+
+// Tipos de marcador (cómo se registra el resultado de un bloque)
+export const SCORE_TYPES = ['time', 'rounds_reps', 'load', 'reps', 'none'];
+
+// Marcador por defecto según el tipo de bloque (el wod se deriva de wod.type)
+export const DEFAULT_SCORE_BY_KIND = {
+  warmup: 'none',
+  strength: 'load',
+  lift: 'load',
+  wod: 'time',
+  accessory: 'none',
+  skill: 'none',
+  free: 'none',
+};
+
+export function defaultScoreType(kind, wod) {
+  if (kind === 'wod') {
+    const t = String(wod?.type || '').toUpperCase();
+    if (t.includes('AMRAP')) return 'rounds_reps';
+    if (t.includes('FOR TIME')) return 'time';
+    return DEFAULT_SCORE_BY_KIND.wod;
+  }
+  return DEFAULT_SCORE_BY_KIND[kind] || 'none';
+}
+
+// Alias en español para detectar movimientos en texto libre → rmKey existente.
+// De más a menos específico (se evalúan en orden). Texto en minúsculas.
+export const RM_ALIASES_ES = [
+  [/cargada\s*(&|y)\s*(env[ií][oó]n|dos tiempos)/, 'cj'],
+  [/(env[ií][oó]n|dos tiempos)/, 'cj'],
+  [/sentadilla\s+(frontal|delantera)/, 'fs'],
+  [/sentadilla\s+(trasera|atr[aá]s)/, 'bs'],
+  [/sentadilla\s+(overhead|por encima de la cabeza)/, 'ohs'],
+  [/cargada\s+de\s+potencia/, 'pc'],
+  [/arrancada\s+de\s+potencia/, 'ps'],
+  [/cargada\s+colgante/, 'hc'],
+  [/press\s+(militar|estricto)/, 'sp'],
+  [/press\s+(de\s+)?banca/, 'bp'],
+  [/press\s+de\s+empuje/, 'pp'],
+  [/peso\s+muerto\s+rumano/, 'rmd'],
+  [/peso\s+muerto/, 'dl'],
+  [/empuje\s+de\s+cadera/, 'ht'],
+  [/arrancada/, 'sn'],
+  [/cargada/, 'clean'],
+];
+
 // Claves de caché offline (F1). Se borran al cerrar sesión para no filtrar datos entre usuarios.
 export const CACHE_KEYS = {
   USER_PROFILE: '@crossfit_user_profile',

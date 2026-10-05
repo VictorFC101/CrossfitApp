@@ -2,6 +2,7 @@ import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, Alert, Acti
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants';
+import { validateProgram, formatValidationIssues } from '../programValidation';
 import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { parseDateFromDay } from '../dateUtils';
@@ -237,15 +238,21 @@ function AddJsonModal({ visible, onClose, onSave }) {
           throw new Error(`${parseErr.message} (archivo de ${text.length} caracteres — revisa que esté completo)`);
         }
       }
-      if (!parsed.weeks || !Array.isArray(parsed.weeks)) throw new Error('Falta el campo "weeks"');
-      if (parsed.weeks.length === 0) throw new Error('"weeks" no puede estar vacío');
-      for (const w of parsed.weeks) {
-        if (!w.days || !Array.isArray(w.days)) throw new Error('Cada semana necesita un array "days"');
+      const validation = validateProgram(parsed);
+      if (!validation.ok) {
+        Alert.alert('Programa no válido', formatValidationIssues(validation.errors, 8));
+        throw new Error(`El programa tiene ${validation.errors.length} error(es): ${validation.errors[0].path}: ${validation.errors[0].msg}`);
       }
       const stripped = stripProgramDates(parsed);
-      setPreview(stripped);
-      setProgramName(stripped.name || '');
-      setError('');
+      const accept = () => { setPreview(stripped); setProgramName(stripped.name || ''); setError(''); };
+      if (validation.warnings.length) {
+        Alert.alert('Avisos del programa', formatValidationIssues(validation.warnings, 8), [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Continuar', onPress: accept },
+        ]);
+      } else {
+        accept();
+      }
     } catch (e) {
       setError(e.message);
       setPreview(null);

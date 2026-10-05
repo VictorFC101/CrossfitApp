@@ -7,6 +7,7 @@ import { supabase } from '../supabase';
 import { RM_NAMES } from '../constants';
 import { formatRmLabel } from '../rmLogic';
 import { isEmailQuery, sanitizeNameQuery } from '../userSearchLogic';
+import DayBlocks from '../components/DayBlocks';
 
 function timeAgo(dateStr) {
   const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
@@ -50,45 +51,7 @@ function FeedItem({ item, t, TIPO_ICONS, TIPO_LABELS, getAmigoData, myUserId, on
             {!!d.resultado && <Text style={{ fontSize: t.fs(22), fontWeight: '900', color: accentColor }}>{d.resultado}</Text>}
             {!!d.notas && <Text style={{ fontSize: t.fs(12), color: t.text2, marginTop: 4, lineHeight: t.fs(18) }}>{d.notas}</Text>}
 
-            {dayData?.strength && (
-              <View style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: t.border, paddingTop: 10 }}>
-                <Text style={{ fontSize: t.fs(9), color: accentColor, letterSpacing: 2, fontWeight: '700', marginBottom: 5 }}>💪 FUERZA</Text>
-                <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: t.text, marginBottom: 5 }}>{dayData.strength.name}</Text>
-                {dayData.strength.sets?.map((s, i) => (
-                  <Text key={i} style={{ fontSize: t.fs(11), color: t.text2, marginBottom: 2 }}>{i + 1}. {s.desc}</Text>
-                ))}
-              </View>
-            )}
-            {dayData?.wod && (dayData.wod.movements?.length > 0 || dayData.wod.parts?.length > 0 || dayData.wod.emomMinutes) && (
-              <View style={{ marginTop: dayData?.strength ? 8 : 10, borderTopWidth: dayData?.strength ? 0 : 1, borderTopColor: t.border, paddingTop: dayData?.strength ? 0 : 10 }}>
-                <Text style={{ fontSize: t.fs(9), color: accentColor, letterSpacing: 2, fontWeight: '700', marginBottom: 5 }}>
-                  ⚡ WOD{!dayData.wod.parts && dayData.wod.type ? ` · ${dayData.wod.type}${dayData.wod.duration ? ` ${dayData.wod.duration}` : ''}` : ''}
-                </Text>
-                {dayData.wod.parts?.length > 0
-                  ? dayData.wod.parts.map((part, pi) => (
-                      <View key={pi} style={{ marginBottom: 6 }}>
-                        <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: accentColor, marginBottom: 3 }}>
-                          {part.label || `WOD ${pi + 1}`}{part.type ? ` · ${part.type}` : ''}{part.duration ? ` · ${part.duration}` : ''}
-                        </Text>
-                        {part.movements?.filter(m => m.name !== '—').map((m, j) => (
-                          <Text key={j} style={{ fontSize: t.fs(11), color: t.text2, marginBottom: 2 }}>
-                            {m.reps} {m.name}{m.weight && m.weight !== 'BW' ? ` · ${m.weight}` : ''}
-                          </Text>
-                        ))}
-                      </View>
-                    ))
-                  : dayData.wod.emomMinutes
-                  ? dayData.wod.emomMinutes.map((min, j) => (
-                      <Text key={j} style={{ fontSize: t.fs(11), color: t.text2, marginBottom: 2 }}>{min.min}: {min.work}</Text>
-                    ))
-                  : dayData.wod.movements?.filter(m => m.name !== '—').map((m, j) => (
-                      <Text key={j} style={{ fontSize: t.fs(11), color: t.text2, marginBottom: 2 }}>
-                        {m.reps} {m.name}{m.weight && m.weight !== 'BW' ? ` · ${m.weight}` : ''}
-                      </Text>
-                    ))
-                }
-              </View>
-            )}
+            {!!dayData && <DayBlocks day={dayData} variant="compact" boxed={false} accent={accentColor} />}
           </View>
         );
       }

@@ -13,6 +13,7 @@ import { fromProgramDay, fromWodLibre } from '../shareResultLogic';
 import { BENCHMARKS, getBenchmark } from '../benchmarks';
 import { detectBenchmark, getBenchmarkHistory, evaluateNewMark } from '../benchmarkLogic';
 import BenchmarkCard from './BenchmarkCard';
+import DayBlocks from '../components/DayBlocks';
 
 const rmNames = RM_NAMES;
 
@@ -925,62 +926,7 @@ export default function HistorialScreen() {
                         </View>
                       )}
 
-                      {day.strength && (
-                        <View style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 12, marginBottom: 12 }}>
-                          <Text style={{ fontSize: t.fs(10), color: accent, letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>💪 FUERZA</Text>
-                          <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text, marginBottom: 8 }}>{day.strength.name}</Text>
-                          {day.strength.sets?.map((s, j) => (
-                            <View key={j} style={{ flexDirection: 'row', gap: 8, marginBottom: 5, alignItems: 'center' }}>
-                              <View style={{ width: 20, height: 20, borderRadius: 4, backgroundColor: accent + '20', alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: accent }}>{j + 1}</Text>
-                              </View>
-                              <Text style={{ fontSize: t.fs(12), color: t.text, flex: 1 }}>{s.desc}</Text>
-                              {s.note ? <Text style={{ fontSize: t.fs(11), color: t.text3 }}>{s.note}</Text> : null}
-                            </View>
-                          ))}
-                        </View>
-                      )}
-
-                      {day.wod && (day.wod.movements?.length > 0 || day.wod.parts?.length > 0 || day.wod.emomMinutes) && (
-                        <View style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 12, marginBottom: 12 }}>
-                          <Text style={{ fontSize: t.fs(10), color: accent, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>
-                            ⚡ WOD{!day.wod.parts && day.wod.type ? ` · ${day.wod.type}${day.wod.duration ? ` ${day.wod.duration}` : ''}` : ''}
-                          </Text>
-                          {day.wod.parts?.length > 0
-                            ? day.wod.parts.map((part, pi) => (
-                                <View key={pi} style={{ marginBottom: pi < day.wod.parts.length - 1 ? 10 : 0 }}>
-                                  <View style={{ backgroundColor: accent + '20', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', marginBottom: 6 }}>
-                                    <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: accent }}>
-                                      {part.label || `WOD ${pi + 1}`}{part.type ? ` · ${part.type}` : ''}{part.duration ? ` · ${part.duration}` : ''}
-                                    </Text>
-                                  </View>
-                                  {part.movements?.filter(m => m.name !== '—').map((m, j) => (
-                                    <View key={j} style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
-                                      <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: accent, minWidth: 30 }}>{m.reps}</Text>
-                                      <Text style={{ fontSize: t.fs(12), color: t.text, flex: 1 }}>{m.name}</Text>
-                                      {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text3 }}>· {m.weight}</Text>}
-                                    </View>
-                                  ))}
-                                  {pi < day.wod.parts.length - 1 && <View style={{ height: 1, backgroundColor: t.border, marginTop: 8 }} />}
-                                </View>
-                              ))
-                            : day.wod.emomMinutes
-                            ? day.wod.emomMinutes.map((min, j) => (
-                                <View key={j} style={{ flexDirection: 'row', gap: 8, marginBottom: 5 }}>
-                                  <Text style={{ fontSize: t.fs(10), fontWeight: '700', color: accent, minWidth: 52 }}>{min.min}</Text>
-                                  <Text style={{ fontSize: t.fs(12), color: t.text }}>{min.work}</Text>
-                                </View>
-                              ))
-                            : day.wod.movements?.filter(m => m.name !== '—').map((m, j) => (
-                                <View key={j} style={{ flexDirection: 'row', gap: 8, marginBottom: 5 }}>
-                                  <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: accent, minWidth: 30 }}>{m.reps}</Text>
-                                  <Text style={{ fontSize: t.fs(12), color: t.text, flex: 1 }}>{m.name}</Text>
-                                  {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text3 }}>· {m.weight}</Text>}
-                                </View>
-                              ))
-                          }
-                        </View>
-                      )}
+                      <DayBlocks day={day} variant="compact" accent={accent} />
 
                       {partnerProfile && partnerResultados[day.day] && (
                         <View style={{ backgroundColor: accent + '08', borderWidth: 1, borderColor: accent + '30', borderRadius: 8, padding: 12, marginBottom: 12 }}>
