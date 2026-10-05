@@ -13,6 +13,7 @@ import { fromProgramDay, fromWodLibre } from '../shareResultLogic';
 import { BENCHMARKS, getBenchmark } from '../benchmarks';
 import { detectBenchmark, getBenchmarkHistory, evaluateNewMark } from '../benchmarkLogic';
 import BenchmarkCard from './BenchmarkCard';
+import LeaderboardCard from './LeaderboardCard';
 
 const rmNames = RM_NAMES;
 
@@ -317,6 +318,11 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
               </Text>
             </TouchableOpacity>
           ) : null}
+          {day?.wod && day.type !== 'Libre' && (
+            <View style={{ marginTop: 14 }}>
+              <LeaderboardCard day={day} programaId={savedResult?.programa_id ?? null} refreshKey={0} />
+            </View>
+          )}
         </ScrollView>
         <ShareHost />
       </View>

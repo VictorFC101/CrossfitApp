@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Image, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Image, Alert, Platform, Switch } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import AdminScreen from './AdminScreen';
 import ShopScreen from './ShopScreen';
@@ -54,6 +54,19 @@ export default function ProfileScreen() {
   const [genero, setGenero] = useState('M');
   const [editando, setEditando] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [mostrarRanking, setMostrarRanking] = useState(true); // privacidad de la clasificación del box
+  useEffect(() => { setMostrarRanking(userProfile?.mostrar_en_ranking !== false); }, [userProfile?.mostrar_en_ranking]);
+
+  // Optimista: se refleja al instante y se revierte si Supabase falla
+  const cambiarMostrarRanking = async (valor) => {
+    if (!userProfile?.id) return;
+    setMostrarRanking(valor);
+    const { error } = await supabase.from('usuarios').update({ mostrar_en_ranking: valor }).eq('id', userProfile.id);
+    if (error) {
+      setMostrarRanking(!valor);
+      Alert.alert('Error', 'No se pudo guardar tu preferencia. Inténtalo de nuevo.');
+    }
+  };
   const [foto, setFoto] = useState(null);
   const [customInput, setCustomInput] = useState('');
   const [showCustom, setShowCustom] = useState(false);
@@ -540,6 +553,17 @@ export default function ProfileScreen() {
               </ScrollView>
             </View>
           )}
+        </View>
+
+        {/* PRIVACIDAD */}
+        <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>🏆 CLASIFICACIÓN</Text>
+        <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 14, marginBottom: 24, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>Mostrar mis resultados en la clasificación del box</Text>
+            <Text style={{ fontSize: t.fs(11), color: t.text3, marginTop: 2 }}>Si lo desactivas, solo tú verás tu posición.</Text>
+          </View>
+          <Switch value={mostrarRanking} onValueChange={cambiarMostrarRanking}
+            trackColor={{ false: t.border, true: t.accent }} />
         </View>
 
         {/* CERRAR SESIÓN */}

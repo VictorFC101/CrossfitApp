@@ -11,6 +11,7 @@ import { RM_CATEGORIES } from '../constants';
 import { getBenchmark } from '../benchmarks';
 import { detectDayBenchmark, getBenchmarkHistory, evaluateNewMark } from '../benchmarkLogic';
 import BenchmarkCard from './BenchmarkCard';
+import LeaderboardCard from './LeaderboardCard';
 import { RM_KEY_NAMES, RM_NAME_PATTERNS, inferRmKeysFromText, getEffectiveRM, parsePercent } from '../wodLogic';
 
 
@@ -345,6 +346,7 @@ export default function WodScreen({ navigate }) {
   const [minutos, setMinutos]     = useState('');
   const [segundos, setSegundos]   = useState('');
   const [saved, setSaved]         = useState(false);
+  const [lbRefresh, setLbRefresh] = useState(0); // fuerza recarga de la clasificación tras guardar
   const [markMsg, setMarkMsg]     = useState(null); // comparación con la última vez tras guardar
   const [adaptacion, setAdaptacion] = useState(null);
   const [showAdaptModal, setShowAdaptModal] = useState(false);
@@ -418,9 +420,10 @@ export default function WodScreen({ navigate }) {
     const summary = partes.map(p => `${p.label}: ${p.resultado || '—'}`).join(' · ');
     await saveResultado(day.day, {
       resultado: summary, notas: '', fecha: new Date().toISOString(),
-      rx: partes.every(p => p.rx), adaptacion, partes,
+      rx: partes.every(p => p.rx), adaptacion, partes, programa_id: activeProgram?.id ?? null,
     });
     setSaved(true);
+    setLbRefresh(k => k + 1);
     setTimeout(() => setSaved(false), 2000);
   };
 
@@ -434,8 +437,9 @@ export default function WodScreen({ navigate }) {
     const evalMark = bm
       ? evaluateNewMark({ resultado: finalResultado, rx }, getBenchmarkHistory(bm.key, resultados, wodsLibres, { excludeDia: day.day }), bm.scoring)
       : null;
-    await saveResultado(day.day, { resultado: finalResultado, notas, fecha: new Date().toISOString(), rx, adaptacion, benchmark_key: dayBenchmark });
+    await saveResultado(day.day, { resultado: finalResultado, notas, fecha: new Date().toISOString(), rx, adaptacion, benchmark_key: dayBenchmark, programa_id: activeProgram?.id ?? null });
     setSaved(true);
+    setLbRefresh(k => k + 1);
     setTimeout(() => setSaved(false), 2000);
     if (evalMark) {
       setMarkMsg(evalMark.message);
@@ -894,6 +898,10 @@ export default function WodScreen({ navigate }) {
             </TouchableOpacity>
           )}
         </View>
+        )}
+
+        {day?.wod && day.type !== 'Libre' && (
+          <LeaderboardCard day={day} programaId={activeProgram?.id ?? null} refreshKey={lbRefresh} />
         )}
 
       </ScrollView>
