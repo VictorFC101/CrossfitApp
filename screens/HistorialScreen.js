@@ -7,39 +7,23 @@ import { useSocial } from '../SocialContext';
 import { MOVEMENTS_DB, CATEGORIES, CATEGORY_COLORS } from '../movements_db';
 import { RM_NAMES, TYPE_COLORS as SHARED_TYPE_COLORS } from '../constants';
 import { parseDateFromDay } from '../dateUtils';
-import { parsePercent } from '../wodLogic';
 import { useShareResult } from '../hooks/useShareResult';
 import { fromProgramDay, fromWodLibre } from '../shareResultLogic';
 import { BENCHMARKS, getBenchmark } from '../benchmarks';
 import { detectBenchmark, getBenchmarkHistory, evaluateNewMark } from '../benchmarkLogic';
 import BenchmarkCard from './BenchmarkCard';
 import DayBlocks from '../components/DayBlocks';
+import PartResultInput from '../components/PartResultInput';
+import { getScorableParts, isSingleLegacyWod, partStateFromSaved, buildPartItem, summarizeParts } from '../resultLogic';
 
 const rmNames = RM_NAMES;
-
-function getDayParts(day) {
-  if (!day) return [];
-  const parts = [];
-  if (day.strength?.sets?.length) {
-    parts.push({ key: 'strength', label: 'FUERZA', isStrength: true, sets: day.strength.sets });
-  }
-  if (day.wod && day.type !== 'Libre') {
-    if (day.wod.parts?.length >= 1) {
-      day.wod.parts.forEach((p, i) => {
-        parts.push({ key: `wod_${i}`, label: p.label || `WOD ${i + 1}`, type: p.type, duration: p.duration });
-      });
-    } else {
-      parts.push({ key: 'wod', label: 'WOD', type: day.wod.type, duration: day.wod.duration });
-    }
-  }
-  return parts.length >= 2 ? parts : [];
-}
 
 function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
   const t = useTheme();
   const { share, sharing, ShareHost } = useShareResult({ acento: t.accent });
-  const dayParts = getDayParts(day);
-  const isMulti = dayParts.length >= 2;
+  const scorable = getScorableParts(day);
+  const isMulti = scorable.length >= 1 && !isSingleLegacyWod(scorable);
+  const dayParts = isMulti ? scorable : [];
 
   // Single-block state
   const [rx, setRx] = useState(true);
@@ -49,30 +33,20 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
   const [repsExtra, setRepsExtra] = useState('');
   const [notas, setNotas] = useState('');
 
-  // Multi-block state: strength → { pesos: string[], notas, rx }
-  //                    wod     → { minutos, segundos, rondas, repsExtra, notas, rx }
+  // Multi-block state: por clave de parte -> { draft, notas, rx, legacyText } (ver resultLogic)
   const [partResults, setPartResults] = useState({});
 
   useEffect(() => {
     if (!visible || !day) return;
     if (isMulti) {
+      const savedPartes = savedResult?.partes || [];
       const init = {};
       dayParts.forEach(p => {
-        const saved = (savedResult?.partes || []).find(s => s.key === p.key);
-        if (p.isStrength) {
-          const raw = saved?.resultado ? saved.resultado.split(' / ').map(s => s.trim()) : [];
-          const pesos = Array(p.sets?.length || 1).fill('').map((_, i) => raw[i] || '');
-          init[p.key] = { pesos, notas: saved?.notas || '', rx: saved?.rx !== false };
-        } else {
-          const r = saved?.resultado || '';
-          const segs = r.split(' · ');
-          const rp = segs.find(s => /^\d+\+\d+$/.test(s.trim())) || '';
-          const tp = segs.find(s => /^\d{1,2}:\d{2}$/.test(s.trim())) || '';
-          const pr = { minutos: '', segundos: '', rondas: '', repsExtra: '', notas: saved?.notas || '', rx: saved?.rx !== false };
-          if (rp) { const [ron, rep] = rp.split('+'); pr.rondas = ron || ''; pr.repsExtra = rep || ''; }
-          if (tp) { const [min, sec] = tp.split(':'); pr.minutos = min || ''; pr.segundos = sec || ''; }
-          init[p.key] = pr;
+        let saved = savedPartes.find(s => s.key === p.key);
+        if (!saved && !savedPartes.length && dayParts.length === 1 && savedResult?.resultado) {
+          saved = { resultado: savedResult.resultado, notas: savedResult.notas, rx: savedResult.rx };
         }
+        init[p.key] = partStateFromSaved(p, saved);
       });
       setPartResults(init);
     } else {
@@ -92,28 +66,10 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
   const updatePart = (key, fields) =>
     setPartResults(prev => ({ ...prev, [key]: { ...(prev[key] || {}), ...fields } }));
 
-  const updatePeso = (key, idx, val) =>
-    setPartResults(prev => {
-      const pesos = [...(prev[key]?.pesos || [])];
-      pesos[idx] = val;
-      return { ...prev, [key]: { ...(prev[key] || {}), pesos } };
-    });
-
   const handleSave = () => {
     if (isMulti) {
-      const partes = dayParts.map(p => {
-        const pr = partResults[p.key] || {};
-        let resultado;
-        if (p.isStrength) {
-          resultado = (pr.pesos || []).filter(Boolean).join(' / ');
-        } else {
-          const tp = pr.minutos ? `${pr.minutos.padStart(2,'0')}:${(pr.segundos||'00').padStart(2,'0')}` : '';
-          const rp = pr.rondas ? `${pr.rondas}+${pr.repsExtra||'0'}` : '';
-          resultado = [rp, tp].filter(Boolean).join(' · ');
-        }
-        return { key: p.key, label: p.label, resultado, notas: pr.notas || '', rx: pr.rx !== false };
-      });
-      const summary = partes.map(p => `${p.label}: ${p.resultado || '—'}`).join(' · ');
+      const partes = dayParts.map(p => buildPartItem(p, partResults[p.key]));
+      const summary = summarizeParts(partes);
       onSave({ resultado: summary, notas: '', fecha: new Date().toISOString(), rx: partes.every(p => p.rx), adaptacion: savedResult?.adaptacion || null, partes });
     } else {
       const tp = minutos ? `${minutos.padStart(2,'0')}:${(segundos||'00').padStart(2,'0')}` : '';
@@ -152,111 +108,9 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
 
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
           {isMulti ? (
-            dayParts.map(part => {
-              const pr = partResults[part.key] || {};
-              const isRx = pr.rx !== false;
-              return (
-                <View key={part.key} style={{ backgroundColor: gbg, borderWidth: 1, borderColor: gborder, borderRadius: 10, padding: 14, marginBottom: 12 }}>
-                  {/* Cabecera del bloque */}
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <Text style={{ fontSize: t.fs(11), fontWeight: '700', color: '#4caf50', letterSpacing: 1 }}>
-                      {part.isStrength ? '💪 ' : '⚡ '}{part.label}
-                    </Text>
-                    {!part.isStrength && part.type && (
-                      <View style={{ backgroundColor: '#4caf5015', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
-                        <Text style={{ fontSize: t.fs(8), color: '#4caf50', fontWeight: '700' }}>
-                          {part.type}{part.duration ? ` · ${part.duration}` : ''}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Rx / Scaled */}
-                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                    <TouchableOpacity onPress={() => updatePart(part.key, { rx: true })}
-                      style={{ flex: 1, backgroundColor: isRx ? '#52b78820' : ibg, borderWidth: 1.5, borderColor: isRx ? '#52b788' : iborder, borderRadius: 8, padding: 8, alignItems: 'center' }}>
-                      <Text style={{ fontSize: t.fs(12), fontWeight: '900', color: isRx ? '#52b788' : ph }}>Rx</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => updatePart(part.key, { rx: false })}
-                      style={{ flex: 1, backgroundColor: !isRx ? '#f4a26120' : ibg, borderWidth: 1.5, borderColor: !isRx ? '#f4a261' : iborder, borderRadius: 8, padding: 8, alignItems: 'center' }}>
-                      <Text style={{ fontSize: t.fs(12), fontWeight: '900', color: !isRx ? '#f4a261' : ph }}>Scaled</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {part.isStrength ? (
-                    /* FUERZA: un input de peso por serie */
-                    <>
-                      {(part.sets || []).map((set, si) => {
-                        const p_pct = parsePercent(set.desc);
-                        return (
-                          <View key={si} style={{ backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, padding: 10, marginBottom: 8 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                              <View style={{ width: 20, height: 20, borderRadius: 4, backgroundColor: '#4caf5020', alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: t.fs(9), color: '#4caf50', fontWeight: '700' }}>{si + 1}</Text>
-                              </View>
-                              <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: icolor, flex: 1 }}>{set.desc}</Text>
-                              {p_pct && (
-                                <View style={{ height: 3, width: 40, backgroundColor: iborder, borderRadius: 2, overflow: 'hidden' }}>
-                                  <View style={{ height: 3, width: `${p_pct}%`, backgroundColor: '#4caf50', borderRadius: 2 }} />
-                                </View>
-                              )}
-                            </View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                              <TextInput
-                                value={(pr.pesos || [])[si] || ''}
-                                onChangeText={v => updatePeso(part.key, si, v)}
-                                keyboardType="decimal-pad"
-                                placeholder="0"
-                                placeholderTextColor={ph}
-                                style={{ ...inp, flex: 1, fontSize: t.fs(22) }}
-                              />
-                              <Text style={{ fontSize: t.fs(13), color: icolor, fontWeight: '700' }}>kg</Text>
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </>
-                  ) : (
-                    /* WOD: MIN:SEG + RONDAS+REPS */
-                    <>
-                      <Text style={[lbl, { marginBottom: 8 }]}>TIEMPO REALIZADO</Text>
-                      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={lbl}>MIN</Text>
-                          <TextInput value={pr.minutos || ''} onChangeText={v => updatePart(part.key, { minutos: v })} keyboardType="numeric" placeholder="00" placeholderTextColor={ph} style={inp} />
-                        </View>
-                        <View style={sep}><Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>:</Text></View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={lbl}>SEG</Text>
-                          <TextInput value={pr.segundos || ''} onChangeText={v => updatePart(part.key, { segundos: v })} keyboardType="numeric" placeholder="00" placeholderTextColor={ph} style={inp} />
-                        </View>
-                      </View>
-                      <Text style={[lbl, { marginBottom: 8 }]}>RONDAS + REPS</Text>
-                      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={lbl}>RONDAS</Text>
-                          <TextInput value={pr.rondas || ''} onChangeText={v => updatePart(part.key, { rondas: v })} keyboardType="numeric" placeholder="0" placeholderTextColor={ph} style={inp} />
-                        </View>
-                        <View style={sep}><Text style={{ fontSize: t.fs(22), color: t.text3, fontWeight: '900' }}>+</Text></View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={lbl}>REPS EXTRA</Text>
-                          <TextInput value={pr.repsExtra || ''} onChangeText={v => updatePart(part.key, { repsExtra: v })} keyboardType="numeric" placeholder="0" placeholderTextColor={ph} style={inp} />
-                        </View>
-                      </View>
-                    </>
-                  )}
-
-                  <TextInput
-                    value={pr.notas || ''}
-                    onChangeText={v => updatePart(part.key, { notas: v })}
-                    placeholder="Notas..."
-                    placeholderTextColor={ph}
-                    multiline
-                    style={{ backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, color: icolor, fontSize: t.fs(13), padding: 10, textAlignVertical: 'top', marginTop: 4 }}
-                  />
-                </View>
-              );
-            })
+            dayParts.map(part => (
+              <PartResultInput key={part.key} part={part} state={partResults[part.key]} onChange={fields => updatePart(part.key, fields)} t={t} />
+            ))
           ) : (
             <View style={{ backgroundColor: gbg, borderWidth: 1, borderColor: gborder, borderRadius: 10, padding: 14 }}>
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>

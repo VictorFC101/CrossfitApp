@@ -1,6 +1,7 @@
 // Lógica pura para compartir un resultado (día de programa o WOD libre).
 // Normaliza ambas fuentes a un único objeto que consume la tarjeta de compartir.
 import { parseDateFromDay } from './dateUtils';
+import { getDayBlocks } from './dayBlocksLogic';
 
 export const CHIP = { RX: 'RX', SCALED: 'SCALED', LIBRE: 'LIBRE' };
 export const HIDDEN_DURATION_TYPES = ['STRENGTH', 'LIBRE'];
@@ -42,6 +43,13 @@ function programMovements(wod) {
   return [];
 }
 
+// Títulos de los bloques de levantamiento (lift) del día, como "movimientos" a compartir
+function liftMovements(day) {
+  return getDayBlocks(day)
+    .filter(b => b?.kind === 'lift' && b.title)
+    .map(b => ({ reps: '', name: b.title, weight: undefined }));
+}
+
 export function fromProgramDay(day, result) {
   if (!day || !result?.resultado) return null;
   const date = parseDateFromDay(day.day);
@@ -52,7 +60,7 @@ export function fromProgramDay(day, result) {
     dateLabel: date ? formatDateLabel(date) : '',
     typeLabel,
     durationLabel: day.wod?.duration || '',
-    movements: programMovements(day.wod),
+    movements: [...liftMovements(day), ...programMovements(day.wod)].slice(0, MAX_SHARE_MOVEMENTS),
     resultado: result.resultado,
     resultParts: parseResultParts(result.resultado),
     chip: result.rx ? CHIP.RX : CHIP.SCALED,

@@ -1,5 +1,7 @@
 // Lógica pura de benchmarks: detección, parseo de marcas, comparación e historial.
 import { BENCHMARKS, BENCHMARK_ALIASES, getBenchmark } from './benchmarks';
+import { SCORE } from './constants';
+import { parsePartResult } from './resultLogic';
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
@@ -48,10 +50,15 @@ const RE_INT = /^\d+$/;
 
 /**
  * Convierte el texto de resultado en un número comparable:
- * time -> segundos; rounds -> rondas*1000 + reps; reps -> reps. null si no se entiende.
+ * time -> segundos; rounds -> rondas*1000 + reps; reps -> reps; load -> kg de la mejor serie
+ * (mayor es mejor). null si no se entiende.
  */
 export function parseScore(resultado, scoring) {
   if (!resultado || typeof resultado !== 'string') return null;
+  if (scoring === SCORE.LOAD) {
+    const v = parsePartResult(SCORE.LOAD, resultado);
+    return v ? v.kg : null;
+  }
   const partes = resultado.split(' · ').map(s => s.trim()).filter(Boolean);
   for (const p of partes) {
     if (scoring === 'time') {
@@ -86,6 +93,7 @@ export function formatScore(score, scoring) {
     return h > 0 ? `${h}:${pad2(m)}:${pad2(s)}` : `${m}:${pad2(s)}`;
   }
   if (scoring === 'rounds') return `${Math.floor(score / 1000)}+${score % 1000}`;
+  if (scoring === SCORE.LOAD) return `${score} kg`;
   return `${score} reps`;
 }
 
@@ -106,6 +114,7 @@ export function formatDelta(aScore, bScore, scoring) {
     if (rep) partes.push(`${rep} ${rep === 1 ? 'rep' : 'reps'}`);
     return `${signo}${partes.join(' y ')}`;
   }
+  if (scoring === SCORE.LOAD) return `${signo}${Math.round(abs * 100) / 100} kg`;
   return `${signo}${abs} ${abs === 1 ? 'rep' : 'reps'}`;
 }
 

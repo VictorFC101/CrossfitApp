@@ -129,8 +129,22 @@ describe('validateProgram', () => {
 describe('defaultScoreType', () => {
   it('deriva del tipo de wod', () => {
     expect(defaultScoreType('wod', { type: 'AMRAP' })).toBe('rounds_reps');
-    expect(defaultScoreType('wod', { type: 'EMOM' })).toBe('time');
+    expect(defaultScoreType('wod', { type: 'EMOM' })).toBe('rounds_reps');
     expect(defaultScoreType('lift')).toBe('load');
     expect(defaultScoreType('warmup')).toBe('none');
+  });
+});
+
+describe('isLegacyDay sobrevive a clonados', () => {
+  const { normalizeDay, isLegacyDay } = require('../programLogic');
+  test('día legacy sigue siendo legacy tras spread y JSON', () => {
+    const d = normalizeDay({ day: 'Martes 28 Jul', type: 'Halterofilia', strength: { title: 'X', sets: [{ desc: '5×3 @ 80%' }] }, wod: { type: 'AMRAP', movements: [] } });
+    expect(isLegacyDay(d)).toBe(true);
+    expect(isLegacyDay({ ...d, blocks: d.blocks.map(b => ({ ...b })) })).toBe(true);
+    expect(isLegacyDay(JSON.parse(JSON.stringify(d)))).toBe(true);
+  });
+  test('día v2 no es legacy', () => {
+    const d = normalizeDay({ day: 'Lunes 5 Oct', blocks: [{ kind: 'lift', title: 'Snatch' }] });
+    expect(isLegacyDay(d)).toBe(false);
   });
 });

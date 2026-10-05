@@ -232,6 +232,13 @@ function synthesizeLegacy(day, blocks) {
 // Conserva todos los campos legacy intactos. Idempotente.
 const derivedBlocks = new WeakSet(); // arrays de blocks derivados de legacy (para ser idempotente sin tocar los campos del día)
 
+// ¿Día legacy (sin blocks propios; los blocks son derivados de strength/wod)?
+export function isLegacyDay(day) {
+  if (!day || typeof day !== 'object') return false;
+  // blocksSource sobrevive a spreads/clonados/JSON; el WeakSet cubre días sin marcar
+  return !Array.isArray(day.blocks) || day.blocksSource === 'legacy' || derivedBlocks.has(day.blocks);
+}
+
 export function normalizeDay(day) {
   if (!day || typeof day !== 'object') return day;
   if (Array.isArray(day.blocks) && derivedBlocks.has(day.blocks)) return day;
@@ -242,7 +249,7 @@ export function normalizeDay(day) {
   const base = normalizeStrength(day);
   const blocks = blocksFromLegacy(base);
   derivedBlocks.add(blocks);
-  return { ...base, blocks };
+  return { ...base, blocks, blocksSource: 'legacy' };
 }
 
 // Normaliza todos los días de un programa (devuelve un programa nuevo)

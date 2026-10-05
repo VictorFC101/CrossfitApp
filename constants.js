@@ -83,6 +83,18 @@ export const BLOCK_KINDS = ['warmup', 'strength', 'lift', 'wod', 'accessory', 's
 // Tipos de marcador (cómo se registra el resultado de un bloque)
 export const SCORE_TYPES = ['time', 'rounds_reps', 'load', 'reps', 'none'];
 
+// Nombres de los tipos de marcador (evita literales repetidos)
+export const SCORE = { TIME: 'time', ROUNDS_REPS: 'rounds_reps', LOAD: 'load', REPS: 'reps', NONE: 'none' };
+
+// Claves legacy de las partes guardadas en resultados.partes (resultados antiguos)
+export const LEGACY_PART_KEYS = { STRENGTH: 'strength', WOD: 'wod', WOD_PART_PREFIX: 'wod_' };
+
+// Colores del selector Rx / Scaled
+export const RX_COLORS = { RX: '#52b788', SCALED: '#f4a261' };
+
+// Separador entre fragmentos de un resultado de texto ("5+12 · 14:30")
+export const RESULT_SEPARATOR = ' · ';
+
 // Marcador por defecto según el tipo de bloque (el wod se deriva de wod.type)
 export const DEFAULT_SCORE_BY_KIND = {
   warmup: 'none',
@@ -99,7 +111,8 @@ export function defaultScoreType(kind, wod) {
     const t = String(wod?.type || '').toUpperCase();
     if (t.includes('AMRAP')) return 'rounds_reps';
     if (t.includes('FOR TIME')) return 'time';
-    return DEFAULT_SCORE_BY_KIND.wod;
+    // Tipos desconocidos (EMOM, intervalos...): rondas+reps y tiempo opcional, como antes
+    return 'rounds_reps';
   }
   return DEFAULT_SCORE_BY_KIND[kind] || 'none';
 }

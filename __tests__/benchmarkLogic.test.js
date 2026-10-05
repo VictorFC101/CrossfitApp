@@ -205,3 +205,25 @@ describe('evaluateNewMark', () => {
     expect(evaluateNewMark({ resultado: '', rx: true }, prev, 'time')).toBeNull();
   });
 });
+
+describe('scoring load (kg de la mejor serie)', () => {
+  it('parseScore devuelve los kg', () => {
+    expect(parseScore('100 kg × 3', 'load')).toBe(100);
+    expect(parseScore('82,5kg', 'load')).toBe(82.5);
+    expect(parseScore('14:30', 'load')).toBeNull();
+    expect(parseScore('', 'load')).toBeNull();
+  });
+  it('mayor es mejor', () => {
+    expect(compareScores(110, 100, 'load')).toBeLessThan(0);
+    expect(compareScores(90, 100, 'load')).toBeGreaterThan(0);
+  });
+  it('formatScore y formatDelta', () => {
+    expect(formatScore(100, 'load')).toBe('100 kg');
+    expect(formatDelta(102.5, 100, 'load')).toBe('+2.5 kg');
+    expect(formatDelta(95, 100, 'load')).toBe('−5 kg');
+  });
+  it('evaluateNewMark detecta PR de carga', () => {
+    const hist = [{ resultado: '100 kg × 3', rx: true, fecha: '2026-09-01' }];
+    expect(evaluateNewMark({ resultado: '105 kg × 1', rx: true }, hist, 'load').kind).toBe('pr');
+  });
+});

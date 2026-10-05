@@ -1,6 +1,6 @@
 // Catálogo de benchmarks de CrossFit (Girls + algunos Heroes).
 // ÚNICA fuente de verdad: pantallas y lógica leen de aquí, no repiten literales.
-// scoring: 'time' (menor es mejor) | 'rounds' (R+r, mayor es mejor) | 'reps' (mayor es mejor)
+// scoring: 'time' (menor es mejor) | 'rounds' (R+r, mayor es mejor) | 'reps' (mayor es mejor) | 'load' (kg de la mejor serie, mayor es mejor)
 // rx: pesos Rx en kg (m = masculino, f = femenino), como texto para admitir casos especiales.
 
 export const BENCHMARKS = [
