@@ -2,6 +2,7 @@
   "expo": {
     "name": "Wodly",
     "slug": "wodly",
+    "scheme": "wodly",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

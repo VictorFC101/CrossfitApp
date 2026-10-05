@@ -8,6 +8,11 @@ import { parseDateFromDay } from '../dateUtils';
 import { supabase } from '../supabase';
 import ProgramBuilderScreen from './ProgramBuilderScreen';
 import AssignProgramScreen from './AssignProgramScreen';
+import { useApp } from '../AppContext';
+import AdminProductosPanel from './admin/AdminProductosPanel';
+import AdminPlanesPanel from './admin/AdminPlanesPanel';
+import AdminPedidosPanel from './admin/AdminPedidosPanel';
+import AdminMembresiasPanel from './admin/AdminMembresiasPanel';
 import { mayo2026 } from '../assets/mayo2026';
 import { junio2026 } from '../assets/junio2026';
 import * as DocumentPicker from 'expo-document-picker';
@@ -1319,6 +1324,8 @@ function IAProgramModal({ visible, onClose, onSave }) {
 export default function AdminScreen({ onClose }) {
   const t = useTheme();
   const { programs, addProgram, deleteProgram } = useProgram();
+  const { userProfile } = useApp();
+  const [pagosPanel, setPagosPanel] = useState(null); // 'productos' | 'planes' | 'pedidos' | 'membresias'
   const [authenticated, setAuthenticated] = useState(false);
   const [showAddJson, setShowAddJson] = useState(false);
   const [showBuilder, setShowBuilder] = useState(false);
@@ -1391,6 +1398,10 @@ export default function AdminScreen({ onClose }) {
   if (showAssign) return <AssignProgramScreen onClose={() => setShowAssign(false)} />;
   if (showUsers) return <UserManagementScreen onClose={() => setShowUsers(false)} />;
   if (showBoxes) return <BoxManagementScreen onClose={() => setShowBoxes(false)} />;
+  if (pagosPanel === 'productos') return <AdminProductosPanel onClose={() => setPagosPanel(null)} />;
+  if (pagosPanel === 'planes') return <AdminPlanesPanel onClose={() => setPagosPanel(null)} />;
+  if (pagosPanel === 'pedidos') return <AdminPedidosPanel onClose={() => setPagosPanel(null)} />;
+  if (pagosPanel === 'membresias') return <AdminMembresiasPanel onClose={() => setPagosPanel(null)} />;
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -1463,6 +1474,23 @@ export default function AdminScreen({ onClose }) {
             <Text style={{ fontSize: t.fs(9), color: '#52b78888', textAlign: 'center' }}>Gimnasios y equipos</Text>
           </TouchableOpacity>
         </View>
+
+        {/* TIENDA Y PAGOS */}
+        {(userProfile?.rol === 'admin' || userProfile?.rol === 'coach') && (
+          <>
+            <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700', marginBottom: 10 }}>TIENDA Y PAGOS</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+              {[['productos', 'TIENDA', 'Productos y stock'], ['planes', 'PLANES', 'Cuotas y bonos'],
+                ['pedidos', 'PEDIDOS', 'Entregas y cancelaciones'], ['membresias', 'MEMBRESÍAS', 'Suscripciones']].map(([k, titulo, sub]) => (
+                <TouchableOpacity key={k} onPress={() => setPagosPanel(k)}
+                  style={{ width: '48%', flexGrow: 1, backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 14, alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: t.fs(11), fontWeight: '700', color: t.text, textAlign: 'center' }}>{titulo}</Text>
+                  <Text style={{ fontSize: t.fs(9), color: t.text3, textAlign: 'center' }}>{sub}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
 
         {/* ASIGNAR */}
         <TouchableOpacity onPress={() => setShowAssign(true)}

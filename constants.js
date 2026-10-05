@@ -102,6 +102,7 @@ export const STORAGE_KEYS = {
   ONBOARDING_DONE: '@crossfit_onboarding_done',
   REMINDER_ENABLED: '@crossfit_reminder_enabled',
   REMINDER_HOUR: '@crossfit_reminder_hour',
+  CARRITO: '@crossfit_carrito',
   USER_PROFILE: CACHE_KEYS.USER_PROFILE,
   HAS_ASIGNACION: CACHE_KEYS.HAS_ASIGNACION,
 };

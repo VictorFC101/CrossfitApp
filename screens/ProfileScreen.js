@@ -1,6 +1,10 @@
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Image, Alert, Platform } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import AdminScreen from './AdminScreen';
+import ShopScreen from './ShopScreen';
+import MembershipsScreen from './MembershipsScreen';
+import OrdersScreen from './OrdersScreen';
+import { usePayments } from '../PaymentContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -56,6 +60,8 @@ export default function ProfileScreen() {
 
   const programInfo = getProgramInfo(plan);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [vistaPagos, setVistaPagos] = useState(null); // 'tienda' | 'membresia' | 'pedidos'
+  const { cantidadCarrito } = usePayments();
   const tapCount = useRef(0);
   const tapTimer = useRef(null);
 
@@ -170,6 +176,9 @@ export default function ProfileScreen() {
   if (showAdmin) {
     return <AdminScreen onClose={() => setShowAdmin(false)} />;
   }
+  if (vistaPagos === 'tienda') return <ShopScreen onClose={() => setVistaPagos(null)} />;
+  if (vistaPagos === 'membresia') return <MembershipsScreen onClose={() => setVistaPagos(null)} />;
+  if (vistaPagos === 'pedidos') return <OrdersScreen onClose={() => setVistaPagos(null)} />;
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -300,6 +309,24 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+
+        {/* TIENDA Y MEMBRESÍA */}
+        <Text style={{ fontSize: t.fs(10), color: t.text3, letterSpacing: 2, fontWeight: '700', marginBottom: 8 }}>TIENDA Y MEMBRESÍA</Text>
+        <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+          {[
+            { key: 'tienda', label: 'Tienda', icon: '🛍️', badge: cantidadCarrito > 0 ? `🛒 ${cantidadCarrito}` : null },
+            { key: 'membresia', label: 'Mi membresía', icon: '🎟️' },
+            { key: 'pedidos', label: 'Mis pedidos', icon: '📦' },
+          ].map((e, i) => (
+            <TouchableOpacity key={e.key} onPress={() => setVistaPagos(e.key)}
+              style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.border }}>
+              <Text style={{ fontSize: t.fs(18), marginRight: 12 }}>{e.icon}</Text>
+              <Text style={{ flex: 1, fontSize: t.fs(14), fontWeight: '700', color: t.text }}>{e.label}</Text>
+              {!!e.badge && <Text style={{ fontSize: t.fs(12), color: t.accent, fontWeight: '800', marginRight: 8 }}>{e.badge}</Text>}
+              <Text style={{ fontSize: t.fs(18), color: t.text3 }}>›</Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         {/* STATS */}
