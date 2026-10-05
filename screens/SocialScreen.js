@@ -6,6 +6,7 @@ import { useProgram } from '../ProgramContext';
 import { supabase } from '../supabase';
 import { RM_NAMES } from '../constants';
 import { formatRmLabel } from '../rmLogic';
+import { isEmailQuery, sanitizeNameQuery } from '../userSearchLogic';
 
 function timeAgo(dateStr) {
   const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
@@ -237,13 +238,21 @@ function FriendsTab({ t }) {
     if (!query.trim()) { loadBoxUsers(); return; }
     setSearching(true);
     try {
-      const { data } = await supabase
-        .from('usuarios_publicos')
-        .select('*')
-        .or(`nombre.ilike.%${query}%,email.ilike.%${query}%`)
-        .neq('id', myUserId)
-        .limit(10);
-      setSearchResults(data || []);
+      if (isEmailQuery(query)) {
+        // Email exacto vía RPC (la columna email ya no es legible)
+        const { data } = await supabase.rpc('find_user_by_email', { p_email: query.trim() });
+        setSearchResults((data || []).filter(u => u.id !== myUserId));
+      } else {
+        const nombre = sanitizeNameQuery(query);
+        if (!nombre) { setSearchResults([]); return; }
+        const { data } = await supabase
+          .from('usuarios_publicos')
+          .select('*')
+          .ilike('nombre', `%${nombre}%`)
+          .neq('id', myUserId)
+          .limit(10);
+        setSearchResults(data || []);
+      }
     } catch (e) {}
     finally { setSearching(false); }
   };
@@ -273,7 +282,7 @@ function FriendsTab({ t }) {
               <Avatar nombre={s.solicitante?.nombre} color={t.accent} size={36} t={t} />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>
-                  {s.solicitante?.nombre || s.solicitante?.email || 'Usuario'}
+                  {s.solicitante?.nombre || 'Usuario'}
                 </Text>
                 <Text style={{ fontSize: t.fs(10), color: t.text3 }}>Quiere conectar contigo</Text>
               </View>
@@ -297,7 +306,7 @@ function FriendsTab({ t }) {
       <TextInput
         value={search}
         onChangeText={v => { setSearch(v); searchUsers(v); }}
-        placeholder="Buscar por nombre o email..."
+        placeholder="Buscar por nombre o email exacto…"
         placeholderTextColor={t.text3}
         style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 10, color: t.text, fontSize: t.fs(14), padding: 12, marginBottom: 12 }} />
 
@@ -331,7 +340,7 @@ function FriendsTab({ t }) {
                   {user.nombre || 'Sin nombre'}
                 </Text>
                 <Text style={{ fontSize: t.fs(10), color: t.text3 }}>
-                  {user.box_nombre || user.email}
+                  {user.box_nombre || ''}
                 </Text>
               </View>
               {yaAmigo ? (
@@ -373,7 +382,6 @@ function FriendsTab({ t }) {
                   <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>
                     {friend.nombre || 'Sin nombre'}
                   </Text>
-                  <Text style={{ fontSize: t.fs(10), color: t.text3 }}>{friend.email}</Text>
                 </View>
                 <TouchableOpacity
                   onPress={() => Alert.alert('Eliminar amigo', '¿Seguro?', [

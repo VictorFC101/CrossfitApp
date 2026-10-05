@@ -60,13 +60,9 @@ export default function AssignProgramScreen({ onClose }) {
   const loadUsers = async (query = '') => {
     setLoadingUsers(true);
     try {
-      let q = supabase.from('usuarios_publicos').select('*');
-      if (query.trim()) {
-        q = q.or(`nombre.ilike.%${query}%,email.ilike.%${query}%`);
-      }
-      const { data, error } = await q.limit(50);
+      const { data, error } = await supabase.rpc('admin_list_users', { p_query: query.trim() || null });
       if (error) throw error;
-      setUsers(data || []);
+      setUsers((data || []).slice(0, 50));
     } catch (e) {
       Alert.alert('Error', `No se pudieron cargar los usuarios: ${e.message}`);
     } finally {
@@ -157,6 +153,7 @@ const handleAssign = async () => {
       if (assignError) throw assignError;
 
       // Notificaciones
+      const { data: coachPub } = await supabase.from('usuarios_publicos').select('nombre').eq('id', coach.id).single();
       const notifs = selectedUsers.map(u => ({
         user_id: u.id,
         tipo: 'programa_asignado',
@@ -166,27 +163,28 @@ const handleAssign = async () => {
           programa_id: selectedProgram.id,
           programa: selectedProgram,
           start_date: startDate,
-          coach_nombre: coach.email,
+          coach_nombre: coachPub?.nombre || 'Tu coach',
         },
       }));
       await supabase.from('notificaciones').insert(notifs);
 
       // Push
       for (const u of selectedUsers) {
-        if (u.push_token) {
-          try {
+        try {
+          const { data: pushToken } = await supabase.rpc('get_push_token', { p_user_id: u.id });
+          if (pushToken) {
             await fetch('https://exp.host/--/api/v2/push/send', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                to: u.push_token,
+                to: pushToken,
                 title: '📋 Nuevo programa',
                 body: `Tu coach te ha asignado "${selectedProgram._meta?.title || selectedProgram.name}"`,
                 data: { tipo: 'programa_asignado', programa_id: selectedProgram.id },
               }),
             });
-          } catch (e) {}
-        }
+          }
+        } catch (e) {}
       }
 
       Alert.alert(

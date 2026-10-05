@@ -80,11 +80,11 @@ export function AppProvider({ children }) {
     if (!hasProfileRef.current) setLoadingProfile(true);
     try {
       let uid = userId;
-      if (!uid) {
-        // getSession lee la sesión local: no depende de la red (getUser sí)
-        const { data: { session } } = await supabase.auth.getSession();
-        uid = session?.user?.id;
-      }
+      // getSession lee la sesión local: no depende de la red (getUser sí)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!uid) uid = session?.user?.id;
+      // El email propio viene de la sesión: la vista pública ya no lo expone
+      const sessionEmail = session?.user?.email || null;
       if (!uid) { setLoadingProfile(false); return; }
 
       const { data } = await supabase
@@ -96,7 +96,7 @@ export function AppProvider({ children }) {
       // Traer campos privados que la vista pública no expone
       const { data: privateData } = await supabase
         .from('usuarios')
-        .select('onboarding_completed, genero, push_token, box_id, partner_id')
+        .select('onboarding_completed, genero, box_id, partner_id')
         .eq('id', uid)
         .single();
 
@@ -116,7 +116,7 @@ export function AppProvider({ children }) {
         AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING_DONE, '1').catch(() => {});
       }
       if (data) {
-        const profile = { ...data, ...(privateData || {}), onboarding_completed: onboardingDone };
+        const profile = { ...data, ...(privateData || {}), email: sessionEmail, onboarding_completed: onboardingDone };
         setUserProfile(profile);
         hasProfileRef.current = true;
         AsyncStorage.setItem(CACHE_KEYS.USER_PROFILE, JSON.stringify(profile)).catch(() => {});
@@ -242,13 +242,13 @@ export function AppProvider({ children }) {
         data: { from_user_id: userProfile.id },
       }).then(() => {});
       // Push notification (background)
-      supabase.from('usuarios').select('push_token').eq('id', friendId).single().then(({ data: dest }) => {
-        if (dest?.push_token) {
+      supabase.rpc('get_push_token', { p_user_id: friendId }).then(({ data: destToken }) => {
+        if (destToken) {
           fetch('https://exp.host/--/api/v2/push/send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              to: dest.push_token,
+              to: destToken,
               title: '🤝 Solicitud de pareja',
               body: `${userProfile.nombre || 'Alguien'} quiere entrenar contigo como pareja`,
               data: { type: 'partner_request', from: userProfile.id },

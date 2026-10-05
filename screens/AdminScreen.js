@@ -516,16 +516,14 @@ function UserManagementScreen({ onClose }) {
   const loadUsers = async (query = '') => {
     setLoading(true);
     try {
-      let q = supabase.from('usuarios_publicos').select('*');
-      if (query.trim()) q = q.or(`nombre.ilike.%${query}%,email.ilike.%${query}%`);
-      const { data } = await q.order('nombre');
+      const { data } = await supabase.rpc('admin_list_users', { p_query: query.trim() || null });
       setUsers(data || []);
     } catch (e) {}
     finally { setLoading(false); }
   };
 
   const loadBoxes = async () => {
-    const { data } = await supabase.from('boxes').select('*');
+    const { data } = await supabase.rpc('admin_list_boxes');
     setBoxes(data || []);
   };
 
@@ -707,14 +705,14 @@ function BoxManagementScreen({ onClose }) {
 
   const loadBoxes = async () => {
     setLoading(true);
-    const { data } = await supabase.from('boxes').select('*').order('nombre');
+    const { data } = await supabase.rpc('admin_list_boxes');
     setBoxes(data || []);
     setLoading(false);
   };
 
   const loadBoxMembers = async (boxId) => {
     if (expandedBox === boxId) { setExpandedBox(null); return; }
-    const { data } = await supabase.from('usuarios_publicos').select('*').eq('box_id', boxId);
+    const { data } = await supabase.rpc('admin_list_users', { p_box_id: boxId });
     setBoxMembers(prev => ({ ...prev, [boxId]: data || [] }));
     setExpandedBox(boxId);
   };

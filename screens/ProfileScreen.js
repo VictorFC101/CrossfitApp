@@ -481,11 +481,11 @@ export default function ProfileScreen() {
                     <TouchableOpacity key={i} onPress={() => {
                         Alert.alert(
                           'Enviar solicitud',
-                          `¿Enviar solicitud de pareja a ${amigo.nombre || amigo.email}?`,
+                          `¿Enviar solicitud de pareja a ${amigo.nombre || 'Usuario'}?`,
                           [
                             { text: 'Cancelar', style: 'cancel' },
                             { text: 'Enviar', onPress: async () => {
-                              const res = await sendPartnerRequest(amigo.id, amigo.nombre || amigo.email);
+                              const res = await sendPartnerRequest(amigo.id, amigo.nombre || 'Usuario');
                               if (!res?.success) Alert.alert('Error', res?.error || 'No se pudo enviar la solicitud.');
                             }},
                           ]
@@ -494,10 +494,10 @@ export default function ProfileScreen() {
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, marginBottom: 8 }}>
                       <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: t.accent + '20', alignItems: 'center', justifyContent: 'center' }}>
                         <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: t.accent }}>
-                          {(amigo.nombre || amigo.email || '?').split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase()}
+                          {(amigo.nombre || 'Usuario').split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase()}
                         </Text>
                       </View>
-                      <Text style={{ flex: 1, fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{amigo.nombre || amigo.email}</Text>
+                      <Text style={{ flex: 1, fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{amigo.nombre || 'Usuario'}</Text>
                       <Text style={{ fontSize: t.fs(11), color: t.accent, fontWeight: '700' }}>Enviar solicitud →</Text>
                     </TouchableOpacity>
                   );

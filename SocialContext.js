@@ -82,7 +82,7 @@ export function SocialProvider({ children }) {
     try {
       const { data, error } = await supabase
         .from('amistades')
-        .select('*, solicitante:user_id(id, nombre, email), receptor:friend_id(id, nombre, email)')
+        .select('*, solicitante:user_id(id, nombre), receptor:friend_id(id, nombre)')
         .or(`user_id.eq.${userId},friend_id.eq.${userId}`);
       if (error) throw error;
       if (data) {
@@ -122,20 +122,16 @@ export function SocialProvider({ children }) {
       // Push notification al receptor
       const { data: receptor } = await supabase
         .from('usuarios')
-        .select('push_token, nombre')
+        .select('id, nombre')
         .eq('id', myUserId)
         .single();
-      const { data: destinatario } = await supabase
-        .from('usuarios')
-        .select('push_token')
-        .eq('id', friendId)
-        .single();
-      if (destinatario?.push_token) {
+      const { data: destToken } = await supabase.rpc('get_push_token', { p_user_id: friendId });
+      if (destToken) {
         await fetch('https://exp.host/--/api/v2/push/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            to: destinatario.push_token,
+            to: destToken,
             title: '👋 Nueva solicitud de amistad',
             body: `${receptor?.nombre || 'Alguien'} quiere conectar contigo en Wodly`,
             data: { type: 'friend_request', from: myUserId },

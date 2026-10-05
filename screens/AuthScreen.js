@@ -29,11 +29,8 @@ export default function AuthScreen({ onAuth }) {
     // Verificar código de box si se introduce
     let boxId = null;
     if (boxCodigo.trim()) {
-      const { data: box } = await supabase
-        .from('boxes')
-        .select('id, nombre')
-        .eq('codigo_invitacion', boxCodigo.trim().toUpperCase())
-        .single();
+      const { data: boxes } = await supabase.rpc('check_box_code', { p_codigo: boxCodigo.trim().toUpperCase() });
+      const box = boxes?.[0];
 
       if (!box) {
         setLoading(false);
@@ -46,7 +43,9 @@ export default function AuthScreen({ onAuth }) {
     if (error) { setLoading(false); return Alert.alert('Error', error.message); }
 
     if (data.user) {
-      await supabase.from('usuarios').upsert({
+      // insert (no upsert): el alta siempre es una fila nueva, y el upsert necesitaría
+      // permiso de lectura sobre email/box_codigo, que el cliente ya no tiene (migración 017b)
+      await supabase.from('usuarios').insert({
         id: data.user.id,
         nombre,
         genero: 'M',
