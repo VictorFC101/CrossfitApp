@@ -17,6 +17,7 @@ import { useSocial } from '../SocialContext';
 import { parseDateFromDay } from '../dateUtils';
 import { supabase } from '../supabase';
 import { RM_MOVEMENTS, STORAGE_KEYS } from '../constants';
+import { confirmar } from '../utils/confirm';
 
 const movements = RM_MOVEMENTS;
 
@@ -492,16 +493,15 @@ export default function ProfileScreen() {
                   if (!amigo) return null;
                   return (
                     <TouchableOpacity key={i} onPress={() => {
-                        Alert.alert(
+                        confirmar(
                           'Enviar solicitud',
                           `¿Enviar solicitud de pareja a ${amigo.nombre || 'Usuario'}?`,
-                          [
-                            { text: 'Cancelar', style: 'cancel' },
-                            { text: 'Enviar', onPress: async () => {
-                              const res = await sendPartnerRequest(amigo.id, amigo.nombre || 'Usuario');
-                              if (!res?.success) Alert.alert('Error', res?.error || 'No se pudo enviar la solicitud.');
-                            }},
-                          ]
+                          'Enviar',
+                          async () => {
+                            const res = await sendPartnerRequest(amigo.id, amigo.nombre || 'Usuario');
+                            if (!res?.success) Alert.alert('Error', res?.error || 'No se pudo enviar la solicitud.');
+                          },
+                          { destructive: false }
                         );
                       }}
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, marginBottom: 8 }}>

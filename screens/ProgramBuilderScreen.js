@@ -546,7 +546,7 @@ export default function ProgramBuilderScreen({ onClose }) {
     const result = await addProgram(program);
     setSaving(false);
     if (!result.success) return Alert.alert('Error', result.error);
-    Alert.alert('✅ Programa guardado', `"${formData.name}" añadido correctamente`, [{ text: 'OK', onPress: onClose }]);
+    avisar('✅ Programa guardado', `"${formData.name}" añadido correctamente`, onClose);
   };
 
   const handleUploadFile = async () => {
@@ -561,7 +561,7 @@ export default function ProgramBuilderScreen({ onClose }) {
       if (!parsed.weeks) throw new Error('El JSON no tiene campo "weeks"');
       const result2 = await addProgram(parsed);
       if (!result2.success) return Alert.alert('Error', result2.error);
-      Alert.alert('✅ Programa importado', `"${parsed.name || 'Programa'}" añadido correctamente`, [{ text: 'OK', onPress: onClose }]);
+      avisar('✅ Programa importado', `"${parsed.name || 'Programa'}" añadido correctamente`, onClose);
     } catch (e) {
       Alert.alert('Error', `No se pudo importar: ${e.message}`);
     }
@@ -573,7 +573,7 @@ export default function ProgramBuilderScreen({ onClose }) {
       if (!parsed.weeks) throw new Error('El JSON no tiene campo "weeks"');
       addProgram(parsed).then(r => {
         if (!r.success) return setJsonError(r.error);
-        Alert.alert('✅ Programa importado', `"${parsed.name || 'Programa'}" añadido correctamente`, [{ text: 'OK', onPress: onClose }]);
+        avisar('✅ Programa importado', `"${parsed.name || 'Programa'}" añadido correctamente`, onClose);
       });
     } catch (e) {
       setJsonError(e.message);
