@@ -71,3 +71,24 @@ export function agruparPorSemana(resultados) {
   });
   return [...grupos.values()];
 }
+
+// Resultados de programa como mapa clave -> resultado (formato que espera getBenchmarkHistory).
+// La clave incluye programa_id para no pisar el mismo día de programas distintos.
+export function resultadosComoMapa(resultados) {
+  const out = {};
+  (resultados || []).forEach((r, i) => { out[`${r.programa_id ?? ''}|${r.dia ?? i}`] = r; });
+  return out;
+}
+
+// WODs libres del RPC -> formato de benchmarkLogic. Sin campo rx se consideran Rx
+// (igual que getBenchmarkHistory: rx !== false).
+export function libresParaBenchmarks(libres) {
+  return (libres || []).filter(w => w?.benchmark_key && w.resultado)
+    .map(w => ({ benchmark_key: w.benchmark_key, resultado: w.resultado, fecha: w.fecha, rx: w.rx !== false }));
+}
+
+// WODs libres sin benchmark -> entradas para la lista de resultados
+export function libresComoResultados(libres) {
+  return (libres || []).filter(w => w && !w.benchmark_key && w.resultado)
+    .map(w => ({ dia: `WOD libre · ${w.nombre || 'Sin nombre'}`, resultado: w.resultado, notas: w.notas, fecha: w.fecha, rx: w.rx !== false, libre: true }));
+}

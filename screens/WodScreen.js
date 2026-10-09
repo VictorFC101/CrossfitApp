@@ -7,7 +7,7 @@ import { getTodayDay, isTodayInProgram, formatDateShort, getToday } from '../dat
 import { useToday } from '../hooks/useToday';
 import { useShareResult } from '../hooks/useShareResult';
 import { fromProgramDay } from '../shareResultLogic';
-import { RM_CATEGORIES } from '../constants';
+import { RM_CATEGORIES, COACH_NOTAS_HINT } from '../constants';
 import { getBenchmark } from '../benchmarks';
 import { detectDayBenchmark, getBenchmarkHistory, evaluateNewMark } from '../benchmarkLogic';
 import BenchmarkCard from './BenchmarkCard';
@@ -317,6 +317,7 @@ function PartResultCard({ part, pr = {}, onChange, t }) {
       <TextInput value={pr.notas || ''} onChangeText={v => onChange({ notas: v })}
         placeholder="Notas..." placeholderTextColor={ph} multiline numberOfLines={2}
         style={{ backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, color: icolor, fontSize: t.fs(13), padding: 12, textAlignVertical: 'top' }} />
+      <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: 4 }}>{COACH_NOTAS_HINT}</Text>
     </View>
   );
 }
@@ -876,6 +877,7 @@ export default function WodScreen({ navigate }) {
             multiline numberOfLines={3}
             style={{ backgroundColor: t.dark ? '#080e0a' : '#fff', borderWidth: 1, borderColor: t.dark ? '#1a3a1e' : '#c8e6c9', borderRadius: 8, color: t.dark ? '#81c784' : '#2e7d32', fontSize: t.fs(13), padding: 12, textAlignVertical: 'top', marginBottom: 10 }}
           />
+          <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: -6, marginBottom: 10 }}>{COACH_NOTAS_HINT}</Text>
 
           {/* Botones */}
           <TouchableOpacity onPress={guardar}

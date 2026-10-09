@@ -1,4 +1,5 @@
-import { diasSinRegistrar, estadoActividad, adherenciaSemana, agruparPorSemana } from '../coachLogic';
+import { diasSinRegistrar, estadoActividad, adherenciaSemana, agruparPorSemana, resultadosComoMapa, libresParaBenchmarks, libresComoResultados } from '../coachLogic';
+import { getBenchmarkHistory } from '../benchmarkLogic';
 
 const NOW = new Date(2026, 9, 9, 10, 0, 0); // 9 oct 2026 (viernes)
 
@@ -66,6 +67,25 @@ describe('coachLogic', () => {
     it('lista vacía o inválida', () => {
       expect(agruparPorSemana([])).toEqual([]);
       expect(agruparPorSemana(null)).toEqual([]);
+    });
+  });
+
+  describe('wods libres y benchmarks', () => {
+    const libres = [
+      { nombre: 'Fran casero', resultado: '4:10', fecha: '2026-10-03T10:00:00Z', benchmark_key: 'fran' },
+      { nombre: 'Mi WOD', resultado: '12 rondas', fecha: '2026-10-04T10:00:00Z', benchmark_key: null, notas: 'duro' },
+    ];
+    it('fusiona programa y libres en el historial, libres como Rx', () => {
+      const prog = [{ dia: 'Lunes 5 Oct', programa_id: 'p', resultado: '5:00', rx: false, fecha: '2026-10-05T10:00:00Z', benchmark_key: 'fran' }];
+      const h = getBenchmarkHistory('fran', resultadosComoMapa(prog), libresParaBenchmarks(libres));
+      expect(h).toHaveLength(2);
+      expect(h.find(e => e.source === 'libre').rx).toBe(true);
+      expect(h.find(e => e.source === 'programa').rx).toBe(false);
+    });
+    it('libres sin benchmark pasan a la lista de resultados', () => {
+      const r = libresComoResultados(libres);
+      expect(r).toHaveLength(1);
+      expect(r[0].dia).toBe('WOD libre · Mi WOD');
     });
   });
 });

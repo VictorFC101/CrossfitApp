@@ -13,6 +13,7 @@ import AdminProductosPanel from './admin/AdminProductosPanel';
 import AdminPlanesPanel from './admin/AdminPlanesPanel';
 import AdminPedidosPanel from './admin/AdminPedidosPanel';
 import AdminMembresiasPanel from './admin/AdminMembresiasPanel';
+import AdminAtletasPanel from './admin/AdminAtletasPanel';
 import { mayo2026 } from '../assets/mayo2026';
 import { junio2026 } from '../assets/junio2026';
 import * as DocumentPicker from 'expo-document-picker';
@@ -1323,7 +1324,7 @@ export default function AdminScreen({ onClose }) {
   const t = useTheme();
   const { programs, addProgram, deleteProgram } = useProgram();
   const { userProfile } = useApp();
-  const [pagosPanel, setPagosPanel] = useState(null); // 'productos' | 'planes' | 'pedidos' | 'membresias'
+  const [pagosPanel, setPagosPanel] = useState(null); // 'productos' | 'planes' | 'pedidos' | 'membresias' | 'atletas'
   const [authenticated, setAuthenticated] = useState(false);
   const [showAddJson, setShowAddJson] = useState(false);
   const [showBuilder, setShowBuilder] = useState(false);
@@ -1400,6 +1401,7 @@ export default function AdminScreen({ onClose }) {
   if (pagosPanel === 'planes') return <AdminPlanesPanel onClose={() => setPagosPanel(null)} />;
   if (pagosPanel === 'pedidos') return <AdminPedidosPanel onClose={() => setPagosPanel(null)} />;
   if (pagosPanel === 'membresias') return <AdminMembresiasPanel onClose={() => setPagosPanel(null)} />;
+  if (pagosPanel === 'atletas') return <AdminAtletasPanel onClose={() => setPagosPanel(null)} />;
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -1472,6 +1474,15 @@ export default function AdminScreen({ onClose }) {
             <Text style={{ fontSize: t.fs(9), color: '#52b78888', textAlign: 'center' }}>Gimnasios y equipos</Text>
           </TouchableOpacity>
         </View>
+
+        {/* ATLETAS (vista de coach) */}
+        {(userProfile?.rol === 'admin' || userProfile?.rol === 'coach') && (
+          <TouchableOpacity onPress={() => setPagosPanel('atletas')}
+            style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 14, alignItems: 'center', marginBottom: 20, gap: 4 }}>
+            <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>ATLETAS</Text>
+            <Text style={{ fontSize: t.fs(9), color: t.text3 }}>Actividad, resultados y RMs de tus atletas</Text>
+          </TouchableOpacity>
+        )}
 
         {/* TIENDA Y PAGOS */}
         {(userProfile?.rol === 'admin' || userProfile?.rol === 'coach') && (
