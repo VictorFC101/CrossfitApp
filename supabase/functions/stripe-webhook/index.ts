@@ -11,6 +11,9 @@
 // murió a mitad), el reintento la "retoma" con un UPDATE condicional atómico y la procesa
 // de nuevo. Si el procesamiento lanza error, la fila se borra y se devuelve 500 para que
 // Stripe reintente.
+// Orden: los eventos de suscripción/factura vuelven a leer la suscripción en Stripe
+// (fetchSubscription) y sincronizan desde ese estado fresco, así un evento tardío o
+// desordenado no resucita ni pisa un estado más nuevo.
 // Todos los handlers son re-ejecutables: las transiciones de estado son condicionales
 // (p.ej. solo pendiente → pagado) y el paso a pagado + descuento de stock va en una sola
 // transacción (RPC marcar_pedido_pagado), por lo que el stock nunca se descuenta dos veces.
@@ -117,25 +120,90 @@ function mapSubscriptionStatus(sub: Stripe.Subscription): string {
   }
 }
 
+interface SuscripcionLocal {
+  id: string;
+  usuario_id: string;
+  estado: string;
+  periodo_fin: string | null;
+}
+
 /** Busca la fila de suscripciones de una suscripción de Stripe (por id o por metadata). */
-async function findSuscripcion(sub: Stripe.Subscription) {
+async function findSuscripcion(
+  subId: string,
+  metadata: Record<string, string> | null | undefined,
+): Promise<SuscripcionLocal | null> {
+  const cols = "id, usuario_id, estado, periodo_fin";
   const { data: byStripe, error } = await admin
     .from("suscripciones")
-    .select("id, usuario_id, estado")
-    .eq("stripe_subscription_id", sub.id)
+    .select(cols)
+    .eq("stripe_subscription_id", subId)
     .maybeSingle();
   if (error) throw error;
   if (byStripe) return byStripe;
 
-  const susId = sub.metadata?.suscripcion_id;
+  const susId = metadata?.suscripcion_id;
   if (!susId) return null;
   const { data: byMeta, error: e2 } = await admin
     .from("suscripciones")
-    .select("id, usuario_id, estado")
+    .select(cols)
     .eq("id", susId)
     .maybeSingle();
   if (e2) throw e2;
   return byMeta;
+}
+
+/**
+ * Estado ACTUAL de la suscripción en Stripe. Los eventos pueden llegar tarde o desordenados
+ * (reintentos), así que el estado nunca se deduce del payload ni del tipo de evento.
+ * null = ya no existe en Stripe (resource_missing) → se trata como 'cancelada'.
+ */
+async function fetchSubscription(id: string): Promise<Stripe.Subscription | null> {
+  try {
+    return await stripe.subscriptions.retrieve(id);
+  } catch (e) {
+    if (e instanceof Stripe.errors.StripeError && e.code === "resource_missing") return null;
+    throw e;
+  }
+}
+
+const TERMINALES = new Set(["cancelada", "vencida"]);
+
+/**
+ * Sincroniza la fila local con la suscripción FRESCA de Stripe. Idempotente.
+ * Reglas:
+ *  - nunca 'activa' sin periodo_fin (CHECK suscripciones_activa_con_fin);
+ *  - un 'pendiente' (incomplete) no pisa una fila que ya avanzó;
+ *  - una fila terminal (cancelada/vencida) es pegajosa: solo vuelve a 'activa' si Stripe la
+ *    tiene realmente activa con un periodo_fin posterior al guardado.
+ * Devuelve el estado con el que queda la fila.
+ */
+async function syncSuscripcion(
+  sus: SuscripcionLocal,
+  subId: string,
+  fresh: Stripe.Subscription | null,
+): Promise<string> {
+  const estado = fresh ? mapSubscriptionStatus(fresh) : "cancelada";
+  const { start, end } = fresh ? subscriptionPeriod(fresh) : { start: null, end: null };
+
+  let aplicar = true;
+  if (estado === "activa" && !end) aplicar = false;
+  if (estado === "pendiente" && sus.estado !== "pendiente") aplicar = false;
+  if (TERMINALES.has(sus.estado)) {
+    const reactivacion = estado === "activa" && !!end &&
+      (!sus.periodo_fin || Date.parse(end) > Date.parse(sus.periodo_fin));
+    if (!reactivacion) aplicar = false;
+  }
+
+  const update: Record<string, unknown> = { stripe_subscription_id: subId };
+  if (aplicar) {
+    update.estado = estado;
+    if (end) update.periodo_fin = end;
+    if (start && sus.estado === "pendiente") update.periodo_inicio = start;
+    if (fresh) update.cancelar_al_final = fresh.cancel_at_period_end;
+  }
+  const { error } = await admin.from("suscripciones").update(update).eq("id", sus.id);
+  if (error) throw error;
+  return aplicar ? estado : sus.estado;
 }
 
 function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
@@ -270,66 +338,30 @@ async function onInvoice(invoice: Stripe.Invoice, paid: boolean): Promise<PagoIn
   };
   if (!subId) return { ...info, estado: "ignorado" };
 
-  const sub = await stripe.subscriptions.retrieve(subId);
-  const sus = await findSuscripcion(sub);
+  const fresh = await fetchSubscription(subId);
+  // deno-lint-ignore no-explicit-any
+  const inv = invoice as any;
+  const meta = fresh?.metadata ?? inv.subscription_details?.metadata ??
+    inv.parent?.subscription_details?.metadata;
+  const sus = await findSuscripcion(subId, meta);
   if (!sus) {
+    if (!fresh) return { ...info, estado: "ignorado" }; // ya no existe en Stripe
     // Puede llegar antes de que exista la fila: devolver error para que Stripe reintente
     throw new Error(`Sin suscripción local para ${subId}`);
   }
 
-  const update: Record<string, unknown> = { stripe_subscription_id: subId };
-  if (paid) {
-    const { start, end } = subscriptionPeriod(sub);
-    const live = mapSubscriptionStatus(sub);
-    if (live === "cancelada" || live === "vencida") {
-      // Factura pagada reenviada/tardía de una suscripción ya terminada: no reactivar
-      update.estado = live;
-      if (end) update.periodo_fin = end;
-    } else {
-      // CHECK suscripciones_activa_con_fin: nunca 'activa' sin periodo_fin
-      if (!end) throw new Error(`Suscripción ${subId} sin current_period_end`);
-      update.estado = "activa";
-      update.periodo_fin = end;
-      if (sus.estado === "pendiente") update.periodo_inicio = start;
-    }
-  } else {
-    // Según el estado real en Stripe: un fallo tardío/reenviado no debe pisar una suscripción
-    // ya terminada ni una que ya se recuperó (activa) con un pago posterior.
-    const live = mapSubscriptionStatus(sub);
-    if (live === "cancelada" || live === "vencida") update.estado = live;
-    else if (live !== "activa") update.estado = "impago";
-  }
-  const { error } = await admin.from("suscripciones").update(update).eq("id", sus.id);
-  if (error) throw error;
-
+  // El estado sale de la suscripción fresca, no del tipo de evento: un invoice.paid tardío
+  // no reactiva una suscripción ya terminada/impagada y un payment_failed tardío no pisa
+  // una que ya se recuperó.
+  await syncSuscripcion(sus, subId, fresh);
   return { ...info, usuario_id: sus.usuario_id, referencia_id: sus.id, estado: paid ? "pagado" : "fallido" };
 }
 
-async function onSubscriptionChange(sub: Stripe.Subscription, deleted: boolean): Promise<PagoInfo> {
-  const sus = await findSuscripcion(sub);
+async function onSubscriptionChange(event: Stripe.Subscription): Promise<PagoInfo> {
+  const fresh = await fetchSubscription(event.id);
+  const sus = await findSuscripcion(event.id, fresh?.metadata ?? event.metadata);
   if (!sus) return { tipo: "suscripcion", estado: "ignorado" };
-
-  let { end } = subscriptionPeriod(sub);
-  const estado = deleted ? (sub.cancel_at_period_end ? "vencida" : "cancelada") : mapSubscriptionStatus(sub);
-
-  // CHECK suscripciones_activa_con_fin: no activar sin periodo_fin. Si el payload no trae el
-  // periodo, se consulta la suscripción en Stripe; si aun así no hay, no se toca el estado.
-  if (estado === "activa" && !end) {
-    end = subscriptionPeriod(await stripe.subscriptions.retrieve(sub.id)).end;
-  }
-
-  // No pisar una activación con un 'pendiente' (incomplete) tardío
-  const update: Record<string, unknown> = {
-    stripe_subscription_id: sub.id,
-    cancelar_al_final: sub.cancel_at_period_end,
-  };
-  if (!(estado === "pendiente" && sus.estado !== "pendiente") && !(estado === "activa" && !end)) {
-    update.estado = estado;
-  }
-  if (end) update.periodo_fin = end;
-
-  const { error } = await admin.from("suscripciones").update(update).eq("id", sus.id);
-  if (error) throw error;
+  const estado = await syncSuscripcion(sus, event.id, fresh);
   return { tipo: "suscripcion", usuario_id: sus.usuario_id, referencia_id: sus.id, estado };
 }
 
@@ -470,9 +502,9 @@ async function handle(event: Stripe.Event): Promise<PagoInfo> {
     case "invoice.payment_failed":
       return await onInvoice(event.data.object as Stripe.Invoice, false);
     case "customer.subscription.updated":
-      return await onSubscriptionChange(event.data.object as Stripe.Subscription, false);
+      return await onSubscriptionChange(event.data.object as Stripe.Subscription);
     case "customer.subscription.deleted":
-      return await onSubscriptionChange(event.data.object as Stripe.Subscription, true);
+      return await onSubscriptionChange(event.data.object as Stripe.Subscription);
     case "charge.refunded":
       return await onChargeRefunded(event.data.object as Stripe.Charge);
     case "charge.dispute.created":
