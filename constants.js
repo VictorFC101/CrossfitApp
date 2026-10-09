@@ -170,3 +170,16 @@ export const STORAGE_KEYS = {
   USER_PROFILE: CACHE_KEYS.USER_PROFILE,
   HAS_ASIGNACION: CACHE_KEYS.HAS_ASIGNACION,
 };
+
+// Tipos de WOD y formatos de equipo del constructor de programas (no repetir literales)
+export const WOD_TYPES = ['AMRAP', 'FOR TIME', 'EMOM', 'INTERVALOS', 'STRENGTH', 'LIBRE'];
+export const WOD_FORMATS = ['YOU GO I GO', 'A REPARTIR LIBREMENTE', 'SYNCHRO', 'INDIVIDUAL', 'EQUIPOS'];
+
+// Etiquetas en español de los tipos de bloque y de marcador (UI del constructor)
+export const BLOCK_KIND_LABELS = {
+  warmup: 'Calentamiento', strength: 'Fuerza', lift: 'Halterofilia', wod: 'WOD',
+  accessory: 'Accesorios', skill: 'Técnica', free: 'Libre',
+};
+export const SCORE_TYPE_LABELS = {
+  time: 'Tiempo', rounds_reps: 'Rondas + reps', load: 'Carga', reps: 'Repeticiones', none: 'Sin marcador',
+};

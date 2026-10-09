@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants';
 import { validateProgram, formatValidationIssues } from '../programValidation';
+import { formatProgramSummary } from '../builderLogic';
+import { confirmar } from './admin/ui';
 import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { parseDateFromDay } from '../dateUtils';
@@ -246,10 +248,14 @@ function AddJsonModal({ visible, onClose, onSave }) {
       const stripped = stripProgramDates(parsed);
       const accept = () => { setPreview(stripped); setProgramName(stripped.name || ''); setError(''); };
       if (validation.warnings.length) {
-        Alert.alert('Avisos del programa', formatValidationIssues(validation.warnings, 8), [
-          { text: 'Cancelar', style: 'cancel' },
-          { text: 'Continuar', onPress: accept },
-        ]);
+        // confirm web-safe (Alert con botones no funciona en react-native-web)
+        confirmar('Avisos del programa',
+          `${formatProgramSummary(stripped, validation.warnings)}
+
+${formatValidationIssues(validation.warnings, 8)}
+
+¿Continuar?`,
+          'Continuar', accept);
       } else {
         accept();
       }
@@ -311,6 +317,9 @@ function AddJsonModal({ visible, onClose, onSave }) {
                 <Text style={{ color: '#52b788', fontSize: t.fs(12), fontWeight: '700', marginBottom: 6 }}>✅ Archivo válido</Text>
                 <Text style={{ color: '#52b788', fontSize: t.fs(11), marginBottom: 2 }}>
                   {preview.weeks.length} semanas · {preview.weeks.reduce((a, w) => a + w.days.length, 0)} días · Fechas eliminadas
+                </Text>
+                <Text style={{ color: '#52b788', fontSize: t.fs(11), marginTop: 6, lineHeight: t.fs(16) }}>
+                  {formatProgramSummary(preview)}
                 </Text>
                 {fileSize > 0 && (
                   <Text style={{ color: '#52b788', fontSize: t.fs(10), marginTop: 2, opacity: 0.8 }}>

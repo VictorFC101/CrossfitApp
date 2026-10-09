@@ -5,16 +5,14 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { parseDateFromDay } from '../dateUtils';
+import { DAY_TYPES, BLOCK_KINDS, BLOCK_KIND_LABELS, SCORE_TYPES, WOD_TYPES, WOD_FORMATS, RM_CATEGORIES, RM_NAMES, TYPE_COLORS } from '../constants';
+import { STRENGTH_KINDS, assembleDay, blockToForm, formToBlock, dayToBuilderBlocks, newFormBlock, summarizeBlock, scoreLabel } from '../builderLogic';
+import { validateProgram, formatValidationIssues } from '../programValidation';
+import { confirmar } from './admin/ui';
 
 const DIAS_ES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const MESES_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 const MESES_FULL = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-
-const WOD_TYPES = ['AMRAP', 'FOR TIME', 'EMOM', 'STRENGTH', 'LIBRE'];
-const SESSION_TYPES = ['Halterofilia', 'Fuerza', 'Libre'];
-const FORMATS = ['YOU GO I GO', 'A REPARTIR LIBREMENTE', 'SYNCHRO', 'INDIVIDUAL', 'EQUIPOS'];
-const RM_KEYS = ['cj', 'sn', 'bs', 'dl', 'fs', 'sp', null];
-const RM_NAMES = { cj: 'C&J', sn: 'Snatch', bs: 'Back Squat', dl: 'Deadlift', fs: 'Front Squat', sp: 'Strict Press' };
 
 function formatDayStr(date) {
   return `${DIAS_ES[date.getDay()]} ${date.getDate()} ${MESES_ES[date.getMonth()]}`;
@@ -176,7 +174,7 @@ function Step3({ data, onChange, allCalDays, weeks, onEditDay, t }) {
     return weeks.find(w => date >= w._weekStart && date <= w._weekEnd);
   };
 
-  const typeColors = { Halterofilia: '#e63946', Fuerza: '#4895ef', Libre: '#f4a261' };
+  const typeColors = Object.fromEntries(DAY_TYPES.map(k => [k, TYPE_COLORS[k]]));
 
   const months = [];
   const seen = new Set();
@@ -262,86 +260,29 @@ function Step3({ data, onChange, allCalDays, weeks, onEditDay, t }) {
   );
 }
 
-// ─── SESSION EDITOR ───────────────────────────────────────────────────────────
+// ─── SESSION EDITOR (días por bloques, schema v2) ─────────────────────────────
 
-function SessionEditor({ date, session, onSave, onDelete, onClose, t }) {
-  const dateStr = formatDayStr(date);
-  const [type, setType] = useState(session?.type || 'Halterofilia');
-  const [label, setLabel] = useState(session?.label || '');
-  const [rmKey, setRmKey] = useState(session?.rmKey || null);
-  const [warmup, setWarmup] = useState(session?.warmup?.join('\n') || '');
-  const [strengthTitle, setStrengthTitle] = useState(session?.strength?.title || '');
-  const [strengthSets, setStrengthSets] = useState(
-    session?.strength?.sets?.map(s => `${s.desc}|${s.note || ''}`).join('\n') || ''
-  );
-  const [strengthRest, setStrengthRest] = useState(session?.strength?.rest || '2-3 min entre series');
-  const [strengthNote, setStrengthNote] = useState(session?.strength?.note || '');
-  const [wodType, setWodType] = useState(session?.wod?.type || 'AMRAP');
-  const [wodDuration, setWodDuration] = useState(session?.wod?.duration || '20 min');
-  const [wodFormat, setWodFormat] = useState(session?.wod?.format || 'YOU GO I GO');
-  const [wodFormatNote, setWodFormatNote] = useState(session?.wod?.formatNote || '');
-  const [movements, setMovements] = useState(
-    session?.wod?.movements?.map(m => `${m.reps}|${m.name}|${m.weight || ''}`).join('\n') || ''
-  );
-  const [gymNote, setGymNote] = useState(session?.wod?.gymNote || '');
-  const [freeContent, setFreeContent] = useState(session?.wod?.freeContent?.join('\n') || '');
-  const [extraTitle, setExtraTitle] = useState(session?.gymExtra?.title || '');
-  const [extraFocus, setExtraFocus] = useState(session?.gymExtra?.focus || '');
-  const [extraBlocks, setExtraBlocks] = useState(
-    session?.gymExtra?.blocks?.map(b => `${b.label}|${b.detail}`).join('\n') || ''
-  );
+// Aviso multiplataforma (Alert.alert no hace nada en react-native-web)
+function notify(title, message) {
+  if (Platform.OS === 'web') {
+    // eslint-disable-next-line no-undef
+    if (typeof window !== 'undefined') window.alert(`${title}\n\n${message}`);
+    return;
+  }
+  Alert.alert(title, message);
+}
 
-  const buildSession = () => {
-    const movArr = movements.split('\n').filter(Boolean).map(line => {
-      const [reps, name, weight] = line.split('|');
-      return { reps: reps?.trim() || '', name: name?.trim() || '', weight: weight?.trim() || 'BW' };
-    });
-    const setsArr = strengthSets.split('\n').filter(Boolean).map(line => {
-      const [desc, note] = line.split('|');
-      return { desc: desc?.trim() || '', note: note?.trim() || '' };
-    });
-    const blocksArr = extraBlocks.split('\n').filter(Boolean).map(line => {
-      const [label, detail] = line.split('|');
-      return { label: label?.trim() || '', detail: detail?.trim() || '' };
-    });
+function isoDate(date) {
+  const p = n => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
+}
 
-    return {
-      day: dateStr,
-      type,
-      label: label.toUpperCase(),
-      rmKey: rmKey || null,
-      warmup: warmup.split('\n').filter(Boolean),
-      strength: type === 'Libre' ? null : {
-        title: strengthTitle,
-        sets: setsArr,
-        rest: strengthRest,
-        note: strengthNote,
-      },
-      wod: type === 'Libre' ? {
-        type: null, duration: null, format: null, formatNote: null,
-        movements: [], gymNote: null,
-        freeContent: freeContent.split('\n').filter(Boolean),
-      } : {
-        type: wodType,
-        duration: wodDuration,
-        format: wodFormat,
-        formatNote: wodFormatNote,
-        movements: movArr,
-        gymNote,
-      },
-      gymExtra: extraTitle ? {
-        title: extraTitle,
-        focus: extraFocus,
-        blocks: blocksArr,
-      } : null,
-    };
-  };
+function SectionHeader({ label, t }) {
+  return <Text style={{ fontSize: t.fs(10), color: t.accent, letterSpacing: 2, fontWeight: '700', marginBottom: 8, marginTop: 16 }}>{label}</Text>;
+}
 
-  const SectionHeader = ({ label }) => (
-    <Text style={{ fontSize: t.fs(10), color: t.accent, letterSpacing: 2, fontWeight: '700', marginBottom: 8, marginTop: 16 }}>{label}</Text>
-  );
-
-  const Field = ({ label, value, onChange, placeholder, multiline }) => (
+function Field({ label, value, onChange, placeholder, multiline, t }) {
+  return (
     <View style={{ marginBottom: 12 }}>
       <Text style={{ fontSize: t.fs(9), color: t.text3, letterSpacing: 1, marginBottom: 4 }}>{label}</Text>
       <TextInput value={value} onChangeText={onChange} placeholder={placeholder}
@@ -349,17 +290,136 @@ function SessionEditor({ date, session, onSave, onDelete, onClose, t }) {
         style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, color: t.text, fontSize: t.fs(13), padding: 10, textAlignVertical: multiline ? 'top' : 'center', minHeight: multiline ? 80 : undefined }} />
     </View>
   );
+}
 
-  const Chips = ({ options, value, onChange }) => (
+// options: valores; labelOf: texto visible; multi: value es un array
+function Chips({ options, value, onChange, labelOf, multi, t }) {
+  const isOn = opt => (multi ? value.includes(opt) : value === opt);
+  const press = opt => {
+    if (!multi) return onChange(opt);
+    onChange(isOn(opt) ? value.filter(v => v !== opt) : [...value, opt]);
+  };
+  return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
       {options.map(opt => (
-        <TouchableOpacity key={String(opt)} onPress={() => onChange(opt)}
-          style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: value === opt ? t.accent + '20' : t.bg4, borderWidth: 1, borderColor: value === opt ? t.accent : t.border, borderRadius: 8 }}>
-          <Text style={{ fontSize: t.fs(11), fontWeight: '700', color: value === opt ? t.accent : t.text3 }}>{opt === null ? 'Ninguno' : (RM_NAMES[opt] || String(opt))}</Text>
+        <TouchableOpacity key={String(opt)} onPress={() => press(opt)}
+          style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: isOn(opt) ? t.accent + '20' : t.bg4, borderWidth: 1, borderColor: isOn(opt) ? t.accent : t.border, borderRadius: 8 }}>
+          <Text style={{ fontSize: t.fs(11), fontWeight: '700', color: isOn(opt) ? t.accent : t.text3 }}>{labelOf ? labelOf(opt) : String(opt)}</Text>
         </TouchableOpacity>
       ))}
     </View>
   );
+}
+
+function SmallLabel({ children, t }) {
+  return <Text style={{ fontSize: t.fs(9), color: t.text3, letterSpacing: 1, marginBottom: 6 }}>{children}</Text>;
+}
+
+function BlockCard({ form, index, total, onChange, onMove, onDelete, t }) {
+  const set = patch => onChange({ ...form, ...patch });
+  const setWod = patch => onChange({ ...form, wod: { ...form.wod, ...patch } });
+  const isStrength = STRENGTH_KINDS.includes(form.kind);
+  const summary = summarizeBlock(formToBlock(form));
+  const iconBtn = (label, onPress, disabled) => (
+    <TouchableOpacity onPress={onPress} disabled={disabled}
+      style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, opacity: disabled ? 0.35 : 1 }}>
+      <Text style={{ fontSize: t.fs(12), color: t.text2, fontWeight: '700' }}>{label}</Text>
+    </TouchableOpacity>
+  );
+  return (
+    <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 12, marginBottom: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <Text style={{ fontSize: t.fs(11), fontWeight: '800', color: t.accent, letterSpacing: 1 }}>
+          {index + 1}. {BLOCK_KIND_LABELS[form.kind].toUpperCase()}
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          {iconBtn('↑', () => onMove(-1), index === 0)}
+          {iconBtn('↓', () => onMove(1), index === total - 1)}
+          {iconBtn('Eliminar', onDelete)}
+        </View>
+      </View>
+
+      <Field t={t} label="TÍTULO" value={form.title} onChange={v => set({ title: v })} placeholder={BLOCK_KIND_LABELS[form.kind]} />
+
+      {isStrength && (
+        <>
+          <SmallLabel t={t}>MOVIMIENTOS (1RM)</SmallLabel>
+          {Object.entries(RM_CATEGORIES).map(([cat, def]) => (
+            <View key={cat}>
+              <Text style={{ fontSize: t.fs(9), color: def.color, fontWeight: '700', marginBottom: 4 }}>{cat.toUpperCase()}</Text>
+              <Chips t={t} multi options={def.movements.map(m => m.key)} value={form.rmKeys}
+                onChange={v => set({ rmKeys: v })} labelOf={k => RM_NAMES[k] || k} />
+            </View>
+          ))}
+          <Field t={t} multiline label="SERIES (una por línea: 5×3 @ 80% | nota opcional)" value={form.prescText} onChange={v => set({ prescText: v })}
+            placeholder={'5×3 @ 80%\n6×(1+1) @ 70-75% | tirón completo\n4x2 @ 70%'} />
+          <Field t={t} label="TEMPO (opcional, para todas las series)" value={form.tempo} onChange={v => set({ tempo: v })} placeholder="21X1" />
+          <Field t={t} label="DESCANSO" value={form.rest} onChange={v => set({ rest: v })} placeholder="2-3 min entre series" />
+        </>
+      )}
+
+      {form.kind === 'wod' && form.wod && (
+        <>
+          <SmallLabel t={t}>TIPO</SmallLabel>
+          <Chips t={t} options={WOD_TYPES} value={form.wod.type} onChange={v => setWod({ type: v })} />
+          <Field t={t} label="DURACIÓN" value={form.wod.duration} onChange={v => setWod({ duration: v })} placeholder="20 min" />
+          <SmallLabel t={t}>FORMATO</SmallLabel>
+          <Chips t={t} options={WOD_FORMATS} value={form.wod.format} onChange={v => setWod({ format: v })} />
+          <Field t={t} label="NOTA DEL FORMATO" value={form.wod.formatNote} onChange={v => setWod({ formatNote: v })} placeholder="Pareja A completa la ronda..." />
+          <Field t={t} multiline label="MOVIMIENTOS (reps|nombre|peso — uno por línea)" value={form.wod.movementsText} onChange={v => setWod({ movementsText: v })}
+            placeholder={'4|Clean & Jerk|♂ 60kg / ♀ 40kg\n10|TTB|BW\n15|Cal Ski Erg|alternos'} />
+          <Field t={t} label="NOTA DEL GYM" value={form.wod.gymNote} onChange={v => setWod({ gymNote: v })} placeholder="Nota para el gimnasio..." />
+          {form.base?.wod?.parts?.length > 0 && (
+            <Text style={{ fontSize: t.fs(10), color: t.text3, marginBottom: 12 }}>
+              Este WOD tiene {form.base.wod.parts.length} partes: se conservan tal cual (solo editables por JSON).
+            </Text>
+          )}
+        </>
+      )}
+
+      {!isStrength && form.kind !== 'wod' && (
+        <Field t={t} multiline label="CONTENIDO (una línea por elemento)" value={form.itemsText} onChange={v => set({ itemsText: v })}
+          placeholder={'400m remo + 10 dislocaciones\nMovilidad de cadera 90 seg'} />
+      )}
+
+      <Field t={t} label="NOTAS" value={form.notes} onChange={v => set({ notes: v })} placeholder="Notas del bloque" />
+
+      {form.kind !== 'warmup' && (
+        <>
+          <SmallLabel t={t}>MARCADOR</SmallLabel>
+          <Chips t={t} options={SCORE_TYPES} value={form.scoreType} onChange={v => set({ scoreType: v })} labelOf={scoreLabel} />
+        </>
+      )}
+
+      <Text style={{ fontSize: t.fs(11), color: t.text3, fontStyle: 'italic' }}>{summary}</Text>
+    </View>
+  );
+}
+
+function SessionEditor({ date, session, onSave, onDelete, onClose, t }) {
+  const dateStr = formatDayStr(date);
+  const [type, setType] = useState(session?.type || DAY_TYPES[0]);
+  const [label, setLabel] = useState(session?.label || '');
+  const [blocks, setBlocks] = useState(() => dayToBuilderBlocks(session).map(blockToForm));
+  const [addKind, setAddKind] = useState(false);
+
+  const updateBlock = (i, f) => setBlocks(bs => bs.map((b, j) => (j === i ? f : b)));
+  const moveBlock = (i, dir) => setBlocks(bs => {
+    const j = i + dir;
+    if (j < 0 || j >= bs.length) return bs;
+    const copy = [...bs];
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+    return copy;
+  });
+  const deleteBlock = i => confirmar('Eliminar bloque', '¿Seguro que quieres eliminar este bloque?', 'Eliminar', () => setBlocks(bs => bs.filter((_, j) => j !== i)));
+  const addBlock = kind => { setBlocks(bs => [...bs, newFormBlock(kind, bs)]); setAddKind(false); };
+
+  const handleSave = () => {
+    const day = assembleDay({ day: dateStr, date: isoDate(date), type, label }, blocks);
+    const v = validateProgram({ weeks: [{ days: [day] }] });
+    if (!v.ok) return notify('No se puede guardar la sesión', formatValidationIssues(v.errors, 8));
+    onSave(day);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -377,67 +437,46 @@ function SessionEditor({ date, session, onSave, onDelete, onClose, t }) {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 60 }}>
-        <SectionHeader label="TIPO DE SESIÓN" />
-        <Chips options={SESSION_TYPES} value={type} onChange={setType} />
+        <SectionHeader t={t} label="TIPO DE SESIÓN" />
+        <Chips t={t} options={DAY_TYPES} value={type} onChange={setType} />
 
-        <SectionHeader label="MOVIMIENTO PRINCIPAL" />
-        <Field label="LABEL" value={label} onChange={setLabel} placeholder="Ej: CLEAN & JERK" />
+        <SectionHeader t={t} label="TÍTULO DEL DÍA" />
+        <Field t={t} label="LABEL" value={label} onChange={setLabel} placeholder="Ej: CLEAN & JERK" />
 
-        {type !== 'Libre' && (
-          <>
-            <Text style={{ fontSize: t.fs(9), color: t.text3, letterSpacing: 1, marginBottom: 6 }}>1RM KEY</Text>
-            <Chips options={[...RM_KEYS]} value={rmKey} onChange={setRmKey} />
-
-            <SectionHeader label="CALENTAMIENTO" />
-            <Field label="Un ejercicio por línea" value={warmup} onChange={setWarmup}
-              placeholder="400m remo + 10 dislocaciones&#10;Movilidad de cadera 90 seg" multiline />
-
-            <SectionHeader label="FUERZA / TÉCNICA" />
-            <Field label="TÍTULO DEL BLOQUE" value={strengthTitle} onChange={setStrengthTitle} placeholder="Ej: Back Squat" />
-            <Field label="SERIES (formato: descripción|nota — una por línea)" value={strengthSets} onChange={setStrengthSets}
-              placeholder="3 × 3 al 65% 1RM|Foco en recepción&#10;3 × 2 al 72% 1RM|Velocidad" multiline />
-            <Field label="DESCANSO" value={strengthRest} onChange={setStrengthRest} placeholder="2-3 min entre series" />
-            <Field label="NOTA GENERAL" value={strengthNote} onChange={setStrengthNote} placeholder="Nota del bloque de fuerza" />
-
-            <SectionHeader label="WOD" />
-            <Text style={{ fontSize: t.fs(9), color: t.text3, letterSpacing: 1, marginBottom: 6 }}>TIPO</Text>
-            <Chips options={WOD_TYPES} value={wodType} onChange={setWodType} />
-            <Field label="DURACIÓN" value={wodDuration} onChange={setWodDuration} placeholder="20 min" />
-            <Text style={{ fontSize: t.fs(9), color: t.text3, letterSpacing: 1, marginBottom: 6 }}>FORMATO</Text>
-            <Chips options={FORMATS} value={wodFormat} onChange={setWodFormat} />
-            <Field label="NOTA DEL FORMATO" value={wodFormatNote} onChange={setWodFormatNote}
-              placeholder="Pareja A completa la ronda..." />
-            <Field label="MOVIMIENTOS (formato: reps|nombre|peso — uno por línea)" value={movements} onChange={setMovements}
-              placeholder="4|Clean & Jerk|♂ 60kg / ♀ 40kg&#10;10|TTB|BW&#10;15|Cal Ski Erg|alternos" multiline />
-            <Field label="NOTA DEL GYM" value={gymNote} onChange={setGymNote}
-              placeholder="💡 Nota para el gimnasio..." />
-
-            <SectionHeader label="BLOQUE TÉCNICO POST-WOD (opcional)" />
-            <Field label="TÍTULO" value={extraTitle} onChange={setExtraTitle} placeholder="Ring Muscle-Up (S1)" />
-            <Field label="FOCO" value={extraFocus} onChange={setExtraFocus} placeholder="Fase de activación..." />
-            <Field label="BLOQUES (formato: nombre|detalle — uno por línea)" value={extraBlocks} onChange={setExtraBlocks}
-              placeholder="Movilidad activa|Dislocaciones x10&#10;False grip hold|3 × 20 seg" multiline />
-          </>
+        <SectionHeader t={t} label={`BLOQUES (${blocks.length})`} />
+        {blocks.length === 0 && (
+          <Text style={{ fontSize: t.fs(12), color: t.text3, marginBottom: 12 }}>Aún no hay bloques. Añade los que necesite el día; ninguno es obligatorio.</Text>
         )}
+        {blocks.map((f, i) => (
+          <BlockCard key={f.id} form={f} index={i} total={blocks.length} t={t}
+            onChange={nf => updateBlock(i, nf)} onMove={dir => moveBlock(i, dir)} onDelete={() => deleteBlock(i)} />
+        ))}
 
-        {type === 'Libre' && (
-          <>
-            <SectionHeader label="CONTENIDO DEL DÍA LIBRE" />
-            <Field label="Una actividad por línea" value={freeContent} onChange={setFreeContent}
-              placeholder="Movilidad y recuperación activa&#10;Cardio suave 30 min" multiline />
-          </>
+        {addKind ? (
+          <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.accent + '60', borderRadius: 12, padding: 12 }}>
+            <SmallLabel t={t}>ELIGE EL TIPO DE BLOQUE</SmallLabel>
+            <Chips t={t} options={BLOCK_KINDS} value={null} onChange={addBlock} labelOf={k => BLOCK_KIND_LABELS[k]} />
+            <TouchableOpacity onPress={() => setAddKind(false)}>
+              <Text style={{ fontSize: t.fs(12), color: t.text3, fontWeight: '700' }}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity onPress={() => setAddKind(true)}
+            style={{ borderWidth: 1, borderStyle: 'dashed', borderColor: t.accent + '80', borderRadius: 12, padding: 14, alignItems: 'center' }}>
+            <Text style={{ color: t.accent, fontWeight: '800', fontSize: t.fs(13) }}>+ AÑADIR BLOQUE</Text>
+          </TouchableOpacity>
         )}
 
         {/* BOTONES */}
         <View style={{ gap: 10, marginTop: 20 }}>
-          <TouchableOpacity onPress={() => onSave(buildSession())}
+          <TouchableOpacity onPress={handleSave}
             style={{ backgroundColor: t.accent, borderRadius: 10, padding: 14, alignItems: 'center' }}>
-            <Text style={{ color: '#fff', fontWeight: '900', fontSize: t.fs(14), letterSpacing: 1 }}>💾 GUARDAR SESIÓN</Text>
+            <Text style={{ color: '#fff', fontWeight: '900', fontSize: t.fs(14), letterSpacing: 1 }}>GUARDAR SESIÓN</Text>
           </TouchableOpacity>
           {session && (
             <TouchableOpacity onPress={onDelete}
               style={{ backgroundColor: '#e6394415', borderWidth: 1, borderColor: '#e6394430', borderRadius: 10, padding: 14, alignItems: 'center' }}>
-              <Text style={{ color: '#e63946', fontWeight: '700', fontSize: t.fs(13) }}>🗑 ELIMINAR SESIÓN</Text>
+              <Text style={{ color: '#e63946', fontWeight: '700', fontSize: t.fs(13) }}>ELIMINAR SESIÓN</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -542,6 +581,8 @@ export default function ProgramBuilderScreen({ onClose }) {
     }));
 
     const program = { name: formData.name, weeks: finalWeeks };
+    const validation = validateProgram(program);
+    if (!validation.ok) return notify('Programa no válido', formatValidationIssues(validation.errors, 8));
     setSaving(true);
     const result = await addProgram(program);
     setSaving(false);
