@@ -7,6 +7,7 @@ import { supabase } from '../supabase';
 import { RM_NAMES } from '../constants';
 import { formatRmLabel } from '../rmLogic';
 import { isEmailQuery, sanitizeNameQuery } from '../userSearchLogic';
+import { confirmar } from '../utils/confirm';
 
 function timeAgo(dateStr) {
   const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
@@ -135,10 +136,7 @@ function FeedItem({ item, t, TIPO_ICONS, TIPO_LABELS, getAmigoData, myUserId, on
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Text style={{ fontSize: t.fs(10), color: t.text3 }}>{timeAgo(item.created_at)}</Text>
           {isMe && (
-            <TouchableOpacity onPress={() => Alert.alert('Eliminar publicación', '¿Seguro que quieres eliminar esta publicación?', [
-              { text: 'Cancelar', style: 'cancel' },
-              { text: 'Eliminar', style: 'destructive', onPress: () => onDeleteFeedItem(item.id) },
-            ])}>
+            <TouchableOpacity onPress={() => confirmar('Eliminar publicación', '¿Seguro que quieres eliminar esta publicación?', 'Eliminar', () => onDeleteFeedItem(item.id))}>
               <Text style={{ fontSize: t.fs(14), color: t.text3 }}>🗑️</Text>
             </TouchableOpacity>
           )}
@@ -384,10 +382,7 @@ function FriendsTab({ t }) {
                   </Text>
                 </View>
                 <TouchableOpacity
-                  onPress={() => Alert.alert('Eliminar amigo', '¿Seguro?', [
-                    { text: 'Cancelar', style: 'cancel' },
-                    { text: 'Eliminar', style: 'destructive', onPress: () => eliminarAmistad(a.id) }
-                  ])}
+                  onPress={() => confirmar('Eliminar amigo', '¿Seguro?', 'Eliminar', () => eliminarAmistad(a.id))}
                   style={{ backgroundColor: '#e6394415', borderRadius: 8, padding: 8, borderWidth: 1, borderColor: '#e6394430' }}>
                   <Text style={{ fontSize: t.fs(11), color: '#e63946' }}>✕</Text>
                 </TouchableOpacity>
