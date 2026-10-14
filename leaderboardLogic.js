@@ -1,5 +1,5 @@
 // Lógica pura de la clasificación del box: tipo de puntuación del WOD y ranking.
-import { parseScore, compareScores } from './benchmarkLogic';
+import { parseScore, compareScores, formatScore } from './benchmarkLogic';
 
 // Mayúsculas, "_" como espacio y espacios colapsados
 const norm = (v) => String(v || '').toUpperCase().replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
@@ -90,15 +90,106 @@ function rankGroup(rows, scoring) {
   return out;
 }
 
+/**
+ * Tipo de puntuación efectivo: si el del WOD es null o ningún resultado se puede leer con él
+ * (p.ej. intervalos "total de reps" pero el atleta anotó rondas+tiempo), se infiere de los resultados.
+ */
+export function effectiveScoring(rows, scoring) {
+  const list = Array.isArray(rows) ? rows : [];
+  const legible = scoring != null && list.some(r => scoreOfRow(r, scoring) != null);
+  return legible ? scoring : (inferScoringFromResults(list) ?? scoring);
+}
+
 /** Separa en Rx y Scaled; si `scoring` es null se infiere de los resultados. (rx !== false cuenta como Rx) y ordena cada grupo. */
 export function rankLeaderboard(rows, scoring) {
   const list = Array.isArray(rows) ? rows : [];
-  // Si el tipo del WOD no da scoring, o ningún resultado se puede leer con él (p.ej. intervalos
-  // "total de reps" pero el atleta anotó rondas+tiempo), se infiere de los propios resultados.
-  const legible = scoring != null && list.some(r => scoreOfRow(r, scoring) != null);
-  const sc = legible ? scoring : (inferScoringFromResults(list) ?? scoring);
+  const sc = effectiveScoring(list, scoring);
   return {
     rx: rankGroup(list.filter(r => r.rx !== false), sc),
     scaled: rankGroup(list.filter(r => r.rx === false), sc),
   };
+}
+
+// Parte que da la marca: índice en `partes` (o -1)
+function markPartIndex(row, scoring) {
+  if (Array.isArray(row.partes) && row.partes.length) {
+    for (let i = row.partes.length - 1; i >= 0; i--) {
+      const p = row.partes[i];
+      if (String(p.key || '').startsWith('wod') && parseScore(p.resultado, scoring) != null) return i;
+    }
+  }
+  return -1;
+}
+
+const NO_MARK = { main: 'Ver detalle', sub: '', short: '—' };
+
+/**
+ * Marca en formato visual: `main` (valor grande), `sub` (secundario) y `short` (compacto para el podio).
+ * rounds -> "8 rondas" / "+ 12 reps"; time -> "8:45" / "tiempo"; reps -> "152" / "reps".
+ */
+export function formatMark(row, scoring) {
+  if (!row || !scoring) return NO_MARK;
+  const score = scoreOfRow(row, scoring);
+  if (score == null) return NO_MARK;
+  if (scoring === 'time') {
+    const t = formatScore(score, 'time');
+    return { main: t, sub: 'tiempo', short: t };
+  }
+  if (scoring === 'rounds') {
+    const r = Math.floor(score / 1000);
+    const reps = score % 1000;
+    return {
+      main: `${r} ${r === 1 ? 'ronda' : 'rondas'}`,
+      sub: reps ? `+ ${reps} ${reps === 1 ? 'rep' : 'reps'}` : '',
+      short: `${r}+${reps}`,
+    };
+  }
+  return { main: String(score), sub: 'reps', short: String(score) };
+}
+
+/** Distancia al primero en texto ("a 1 ronda del 1º", "a 0:35 del 1º", "a 12 reps del 1º"); null si no aplica. */
+export function gapToFirst(row, first, scoring) {
+  if (!row || !first || !scoring || row === first) return null;
+  const a = scoreOfRow(row, scoring);
+  const b = scoreOfRow(first, scoring);
+  if (a == null || b == null) return null;
+  const d = Math.abs(a - b);
+  if (d === 0) return null;
+  if (scoring === 'time') return `a ${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')} del 1º`;
+  if (scoring === 'rounds') {
+    const r = Math.floor(d / 1000);
+    const reps = d % 1000;
+    const partes = [];
+    if (r) partes.push(`${r} ${r === 1 ? 'ronda' : 'rondas'}`);
+    if (reps) partes.push(`${reps} ${reps === 1 ? 'rep' : 'reps'}`);
+    return `a ${partes.join(' y ')} del 1º`;
+  }
+  return `a ${d} ${d === 1 ? 'rep' : 'reps'} del 1º`;
+}
+
+/**
+ * Detalle desplegable: las demás partes del resultado (sin la que da la marca principal).
+ * Sin partes, el texto completo de `resultado`. Nunca incluye notas.
+ */
+export function detailParts(row, scoring) {
+  if (!row) return [];
+  if (Array.isArray(row.partes) && row.partes.length) {
+    const idx = markPartIndex(row, scoring);
+    return row.partes
+      .filter((p, i) => i !== idx && p.resultado)
+      .map(p => ({ label: p.label || '', text: String(p.resultado) }));
+  }
+  return row.resultado ? [{ label: '', text: String(row.resultado) }] : [];
+}
+
+/** "hace N min/h", "ayer" o "hace N días" respecto a `now`; '' si la fecha no es válida. */
+export function relativeTime(fecha, now = new Date()) {
+  const d = new Date(fecha);
+  if (!fecha || isNaN(d.getTime())) return '';
+  const min = Math.max(0, Math.floor((new Date(now).getTime() - d.getTime()) / 60000));
+  if (min < 60) return `hace ${Math.max(1, min)} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `hace ${h} h`;
+  const dias = Math.floor(h / 24);
+  return dias === 1 ? 'ayer' : `hace ${dias} días`;
 }

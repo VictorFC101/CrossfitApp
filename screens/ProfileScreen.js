@@ -17,6 +17,7 @@ import { useSocial } from '../SocialContext';
 import { parseDateFromDay } from '../dateUtils';
 import { supabase } from '../supabase';
 import { RM_MOVEMENTS, STORAGE_KEYS } from '../constants';
+import { urlVersionada } from '../imageUtils';
 
 const movements = RM_MOVEMENTS;
 
@@ -151,10 +152,13 @@ export default function ProfileScreen() {
           .upload(path, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
         if (uploadError) throw uploadError;
         // Obtener URL pública y guardar en tabla usuarios
-        const { data: { publicUrl } } = supabase.storage
+        const { data } = supabase.storage
           .from('avatars')
           .getPublicUrl(path);
-        await supabase.from('usuarios').update({ avatar_url: publicUrl }).eq('id', userProfile.id);
+        // URL versionada: misma ruta en Storage, pero URL nueva para saltarse la caché
+        const publicUrl = urlVersionada(data.publicUrl);
+        const { error: updError } = await supabase.from('usuarios').update({ avatar_url: publicUrl }).eq('id', userProfile.id);
+        if (updError) throw updError;
         setFoto(publicUrl);
         // Refrescar userProfile en memoria para que avatar_url esté disponible
         await loadUserProfile(userProfile.id);

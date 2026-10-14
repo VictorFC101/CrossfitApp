@@ -7,6 +7,7 @@ import { useTheme } from '../ThemeContext';
 import { useApp } from '../AppContext';
 import { supabase } from '../supabase';
 import { RM_MOVEMENTS } from '../constants';
+import { urlVersionada } from '../imageUtils';
 
 const TOTAL_STEPS = 4;
 
@@ -40,8 +41,9 @@ export default function OnboardingScreen({ onComplete }) {
           : decode(await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }));
         const { error } = await supabase.storage.from('avatars').upload(path, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
         if (!error) {
-          const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
-          await supabase.from('usuarios').update({ avatar_url: publicUrl }).eq('id', userProfile.id);
+          const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+          // URL versionada para que no se muestre la foto anterior cacheada
+          await supabase.from('usuarios').update({ avatar_url: urlVersionada(data.publicUrl) }).eq('id', userProfile.id);
         }
       } catch (e) {}
       setUploadingFoto(false);
