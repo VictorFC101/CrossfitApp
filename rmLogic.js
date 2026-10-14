@@ -69,3 +69,27 @@ export function isValidRmInput(val) {
   const n = parseFloat(s);
   return n > 0 && n <= RM_MAX_KG;
 }
+
+// Borrador de RM: decide qué guardar. Devuelve el valor normalizado o null si no hay que guardar
+// (vacío, inválido o igual al valor ya guardado).
+export function pickRmCommit(draft, stored) {
+  if (!draft) return null;
+  const val = String(draft.val ?? '').trim().replace(',', '.');
+  if (!isValidRmInput(val)) return null;
+  if (parseFloat(val) === parseFloat(stored)) return null;
+  return val;
+}
+
+// Toma el borrador de un ref y lo vacía de forma síncrona: una segunda llamada (onBlur tras
+// onSubmitEditing, etc.) recibe null y no vuelve a guardar.
+export function takeDraft(ref) {
+  const d = ref.current;
+  ref.current = null;
+  return d;
+}
+
+// Mensaje de confirmación tras guardar, con el nombre del movimiento
+export function rmSavedMessage(name, val, reps = 1) {
+  const label = parseInt(reps) > 1 ? `${formatRmLabel(reps)} de ${name}` : `RM de ${name}`;
+  return `${label} actualizado: ${val} kg`;
+}

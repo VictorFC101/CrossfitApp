@@ -38,7 +38,7 @@ export const RM_CATEGORIES = {
     color: '#e63946',
     movements: [
       { key: 'cj',    name: 'CLEAN & JERK',      short: 'C&J',  pcts: [0.65, 0.72, 0.78, 0.82, 0.87, 0.92] },
-      { key: 'sn',    name: 'SNATCH',             short: 'SNT',  pcts: [0.60, 0.68, 0.75, 0.80, 0.85, 0.90] },
+      { key: 'sn',    name: 'SQUAT SNATCH',            short: 'SNT',  pcts: [0.60, 0.68, 0.75, 0.80, 0.85, 0.90] },
       { key: 'pc',    name: 'POWER CLEAN',        short: 'PC',   pcts: [0.65, 0.72, 0.78, 0.82, 0.87, 0.92] },
       { key: 'ps',    name: 'POWER SNATCH',       short: 'PS',   pcts: [0.60, 0.68, 0.75, 0.80, 0.85, 0.90] },
       { key: 'clean', name: 'CLEAN',              short: 'CLN',  pcts: [0.65, 0.72, 0.78, 0.82, 0.87, 0.92] },
