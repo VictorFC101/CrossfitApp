@@ -1,4 +1,4 @@
-import { estimateOneRepMax, oneRepMaxWarning, buildWeightTable, buildRmsByReps, bestEstimated1RM, formatRmLabel } from '../rmLogic';
+import { estimateOneRepMax, oneRepMaxWarning, buildWeightTable, buildRmsByReps, bestEstimated1RM, formatRmLabel, pickRmCommit, takeDraft, rmSavedMessage } from '../rmLogic';
 
 describe('rmLogic', () => {
   describe('estimateOneRepMax (Epley)', () => {
@@ -125,5 +125,28 @@ describe('isValidRmInput', () => {
   });
   test('rechaza vacío, cero, texto y valores absurdos', () => {
     ['', '0', 'abc', '9a', '-5', '600', null, undefined].forEach(v => expect(isValidRmInput(v)).toBe(false));
+  });
+});
+
+describe('borrador de RM', () => {
+  it('pickRmCommit normaliza, ignora vacío/inválido/igual al guardado', () => {
+    expect(pickRmCommit({ val: ' 78,5 ' }, '70')).toBe('78.5');
+    expect(pickRmCommit({ val: '' }, '70')).toBeNull();
+    expect(pickRmCommit({ val: 'abc' }, '70')).toBeNull();
+    expect(pickRmCommit({ val: '70' }, '70')).toBeNull();
+    expect(pickRmCommit(null, '70')).toBeNull();
+  });
+  it('takeDraft entrega el borrador una sola vez (onSubmit + onBlur no duplican)', () => {
+    const ref = { current: { mov: 'ps', reps: 1, val: '78' } };
+    const saves = [];
+    for (let i = 0; i < 3; i++) {
+      const d = takeDraft(ref);
+      if (d && pickRmCommit(d, '')) saves.push(d.mov);
+    }
+    expect(saves).toEqual(['ps']);
+  });
+  it('rmSavedMessage nombra el movimiento', () => {
+    expect(rmSavedMessage('POWER SNATCH', '78', 1)).toBe('RM de POWER SNATCH actualizado: 78 kg');
+    expect(rmSavedMessage('SQUAT SNATCH', '60', 3)).toBe('3RM de SQUAT SNATCH actualizado: 60 kg');
   });
 });

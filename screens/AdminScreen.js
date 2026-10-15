@@ -545,14 +545,11 @@ function UserManagementScreen({ onClose }) {
   };
 
   const deleteAssignment = async (asigId, userId) => {
-    Alert.alert('Quitar programa', '¿Seguro que quieres quitar este programa al usuario?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: async () => {
-        const { error } = await supabase.from('asignaciones').update({ status: 'rechazado' }).eq('id', asigId);
-        if (error) return Alert.alert('Error', error.message);
-        setUserPrograms(prev => ({ ...prev, [userId]: prev[userId].filter(a => a.id !== asigId) }));
-      }}
-    ]);
+    confirmar('Quitar programa', '¿Seguro que quieres quitar este programa al usuario?', 'Eliminar', async () => {
+      const { error } = await supabase.from('asignaciones').update({ status: 'rechazado' }).eq('id', asigId);
+      if (error) return Alert.alert('Error', error.message);
+      setUserPrograms(prev => ({ ...prev, [userId]: prev[userId].filter(a => a.id !== asigId) }));
+    });
   };
 
   const loadUserPrograms = async (userId) => {
@@ -753,13 +750,10 @@ function BoxManagementScreen({ onClose }) {
   };
 
   const deleteBox = async (boxId) => {
-    Alert.alert('Eliminar box', '¿Seguro? Los usuarios perderán su asignación.', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: async () => {
-        await supabase.from('boxes').delete().eq('id', boxId);
-        loadBoxes();
-      }}
-    ]);
+    confirmar('Eliminar box', '¿Seguro? Los usuarios perderán su asignación.', 'Eliminar', async () => {
+      await supabase.from('boxes').delete().eq('id', boxId);
+      loadBoxes();
+    });
   };
 
   const roleColors = { admin: '#e63946', coach: '#4895ef', atleta: '#52b788' };
@@ -1363,13 +1357,10 @@ export default function AdminScreen({ onClose }) {
 
   const handleDelete = (program) => {
     if (program._meta?.status === 'activo') return Alert.alert('No permitido', 'No puedes eliminar el programa activo.');
-    Alert.alert('Eliminar programa', `¿Seguro que quieres eliminar "${program._meta?.title || 'este programa'}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: async () => {
-        const result = await deleteProgram(program.id);
-        if (!result.success) Alert.alert('Error', result.error);
-      }}
-    ]);
+    confirmar('Eliminar programa', `¿Seguro que quieres eliminar "${program._meta?.title || 'este programa'}"?`, 'Eliminar', async () => {
+      const result = await deleteProgram(program.id);
+      if (!result.success) Alert.alert('Error', result.error);
+    });
   };
 
   const handlePublish = async (program) => {
