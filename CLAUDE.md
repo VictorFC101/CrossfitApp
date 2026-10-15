@@ -22,6 +22,15 @@ Antes de dar por terminada una tarea de DESARROLLADOR o QA, ejecuta en este orde
 
 Funcionalidades nativas (notificaciones push, compartir resultado como imagen, subir foto desde cámara/rollo en nativo, `eas update`) no se pueden validar en web — siguen requiriendo prueba en un teléfono real o simulador.
 
+## Publicación y ramas (varios chats en paralelo)
+
+Varios chats trabajan a la vez. Para que nadie pise el trabajo de otro:
+
+- **Empezar:** cada tarea en su propia rama/worktree creada desde `origin/main` recién descargado (`git fetch origin` primero). Nunca cambiar de rama en la carpeta principal: otros chats la usan.
+- **Integrar:** antes de cada push, `git fetch origin && git rebase origin/main`. Push sin `--force` a `main`. Si el rebase tiene conflictos con trabajo de otro chat, parar y avisar a Victor.
+- **Publicar al móvil:** SOLO con `npm run eas:publish -- "mensaje"`. Publica `origin/main` desde un worktree limpio, comprueba dependencias, pasa los tests y etiqueta el update con el commit (`main@<sha>`). Se niega si tu rama tiene commits sin integrar en `origin/main`: integra primero y publica después.
+- `eas update` directo está bloqueado por un hook (`scripts/guard-eas-update.js`). No intentes saltarlo.
+
 ## Reglas críticas
 
 - Provider nesting obligatorio (App.js): SafeAreaProvider → ThemeProvider → ErrorBoundary → ProgramProvider → NotificationProvider → AppProvider → AppInner (sesión/auth gestionada aquí) → SocialProvider
