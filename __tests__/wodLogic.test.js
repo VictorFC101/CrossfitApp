@@ -1,4 +1,4 @@
-import { inferRmKeysFromText, getEffectiveRM, RM_KEY_NAMES } from '../wodLogic';
+import { inferRmKeysFromText, getEffectiveRM, RM_KEY_NAMES, inferRmKeyFromText } from '../wodLogic';
 
 describe('wodLogic', () => {
   describe('inferRmKeysFromText', () => {
@@ -107,4 +107,17 @@ describe('parsePercent', () => {
   test('decimal con punto', () => expect(parsePercent('3 reps al 77.5 %')).toBe(77.5));
   test('sin porcentaje', () => expect(parsePercent('Técnica · 2 Hang Power Snatches')).toBeNull());
   test('desc vacía o ausente', () => { expect(parsePercent('')).toBeNull(); expect(parsePercent(undefined)).toBeNull(); });
+});
+
+describe('mapeo de nombres Snatch -> rmKey', () => {
+  test.each([
+    ['Snatch', 'sn'],
+    ['Squat Snatch', 'sn'],
+    ['Hang Snatch', 'sn'],
+    ['Power Snatch', 'ps'],
+    ['Hang Power Snatch', 'hps'],
+  ])('%s -> %s', (txt, key) => expect(inferRmKeyFromText(txt)).toBe(key));
+  test('RM_KEY_NAMES.sn es SQUAT SNATCH', () => expect(RM_KEY_NAMES.sn).toBe('SQUAT SNATCH'));
+  test('Power Snatch + Squat Snatch distinguen ambos', () =>
+    expect(inferRmKeysFromText('Power Snatch + Squat Snatch')).toEqual(['ps', 'sn']));
 });

@@ -1,12 +1,12 @@
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Dimensions } from 'react-native';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Svg, { Path, Circle, Line, Text as SvgText, Rect } from 'react-native-svg';
 import { useApp } from '../AppContext';
 import { useTheme } from '../ThemeContext';
 import { RM_CATEGORIES, RM_REPS } from '../constants';
 import { supabase } from '../supabase';
 import BenchmarksView from './BenchmarksView';
-import { estimateOneRepMax, oneRepMaxWarning, buildWeightTable, bestEstimated1RM, formatRmLabel, isValidRmInput } from '../rmLogic';
+import { estimateOneRepMax, oneRepMaxWarning, buildWeightTable, bestEstimated1RM, formatRmLabel, pickRmCommit, takeDraft, rmSavedMessage } from '../rmLogic';
 
 const SCREEN_W = Dimensions.get('window').width;
 const CHART_W = SCREEN_W - 72; // padding scrollview 14*2 + card padding 14*2 + margen
@@ -132,6 +132,8 @@ export default function RMScreen() {
   const [activeCategory, setActiveCategory] = useState('Halterofilia');
   const [expanded, setExpanded]   = useState(null);
   const [saved, setSaved]         = useState(null);
+  const [savedMsg, setSavedMsg]   = useState('');
+  const savedTimer = useRef(null);
   const [historial, setHistorial] = useState({});  // { [key]: [{peso, fecha}] }
   const [loadingH, setLoadingH]   = useState(null);
   const [selReps, setSelReps]     = useState(1); // reps de la marca que se edita
@@ -170,25 +172,39 @@ export default function RMScreen() {
 
   // Borrador del input: antes se guardaba en cada pulsación y al editar quedaban
   // fragmentos ("90" → "9") como RM actual. Ahora solo se guarda al terminar de editar.
-  const [draft, setDraft] = useState(null); // { key: 'mov|reps', val }
-  const commitDraft = (key, stored) => {
-    if (!draft || draft.key !== `${key}|${selReps}`) return;
-    const val = draft.val.trim().replace(',', '.');
+  // El borrador lleva su propio movimiento y reps (nunca se compara con la tarjeta expandida)
+  // y se vacía de forma síncrona vía draftRef: onSubmitEditing + onBlur llegan en el mismo tick
+  // y antes guardaban 3 veces.
+  const [draft, setDraft] = useState(null); // { key: 'mov|reps', mov, reps, val }
+  const draftRef = useRef(null);
+  const updateDraft = (mov, reps, val) => {
+    const d = { key: `${mov}|${reps}`, mov, reps, val };
+    draftRef.current = d;
+    setDraft(d);
+  };
+  const commitDraft = () => {
+    const d = takeDraft(draftRef);
+    if (!d) return;
     setDraft(null);
-    if (!isValidRmInput(val) || parseFloat(val) === parseFloat(stored)) return;
-    handleSave(key, val);
+    const stored = (d.reps === 1 ? rms[d.mov] : rmsByReps?.[d.mov]?.[d.reps]) || '';
+    const val = pickRmCommit(d, stored);
+    if (val !== null) handleSave(d.mov, val, d.reps);
   };
 
-  const handleSave = async (key, val) => {
-    await saveRM(key, val, selReps);
+  const handleSave = async (key, val, reps = selReps) => {
+    const mvName = Object.values(RM_CATEGORIES).flatMap(c => c.movements).find(m => m.key === key)?.name || key;
+    await saveRM(key, val, reps);
     setSaved(key);
+    setSavedMsg(rmSavedMessage(mvName, val, reps));
     // Invalidar historial para que se recargue
-    setHistorial(prev => { const next = { ...prev }; delete next[`${key}|${selReps}`]; return next; });
-    setTimeout(() => setSaved(null), 2000);
+    setHistorial(prev => { const next = { ...prev }; delete next[`${key}|${reps}`]; return next; });
+    clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => { setSaved(null); setSavedMsg(''); }, 2500);
   };
 
   // Resetear calculadora al cambiar movimiento
   useEffect(() => {
+    commitDraft(); // si el blur no llegó a dispararse, guarda el borrador pendiente en SU movimiento
     setShowCalc(false);
     setCalcPeso('');
     setCalcReps('');
@@ -258,6 +274,11 @@ export default function RMScreen() {
         <BenchmarksView resultados={resultados} wodsLibres={wodsLibres} genero={userProfile?.genero} accentColor={accentColor} />
       ) : (
       <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 60 }}>
+        {!!savedMsg && (
+          <View style={{ backgroundColor: '#52b78820', borderWidth: 1, borderColor: '#52b788', borderRadius: 10, padding: 10, marginBottom: 10 }}>
+            <Text style={{ fontSize: t.fs(12), fontWeight: '700', color: '#52b788' }}>{`✓ ${savedMsg}`}</Text>
+          </View>
+        )}
         {category.movements.map((mv) => {
           const isOpen  = expanded === mv.key;
           const val     = parseFloat(rms[mv.key]);
@@ -350,10 +371,9 @@ export default function RMScreen() {
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                       <TextInput
                         value={draft?.key === `${mv.key}|${selReps}` ? draft.val : ((selReps === 1 ? rms[mv.key] : mvByReps[selReps]) || '')}
-                        onChangeText={(v) => setDraft({ key: `${mv.key}|${selReps}`, val: v })}
-                        onEndEditing={() => commitDraft(mv.key, (selReps === 1 ? rms[mv.key] : mvByReps[selReps]) || '')}
-                        onSubmitEditing={() => commitDraft(mv.key, (selReps === 1 ? rms[mv.key] : mvByReps[selReps]) || '')}
-                        onBlur={() => commitDraft(mv.key, (selReps === 1 ? rms[mv.key] : mvByReps[selReps]) || '')}
+                        onChangeText={(v) => updateDraft(mv.key, selReps, v)}
+                        onSubmitEditing={commitDraft}
+                        onBlur={commitDraft}
                         returnKeyType="done"
                         keyboardType="numeric"
                         placeholder="kg"
@@ -441,7 +461,7 @@ export default function RMScreen() {
                               </Text>
                               <TouchableOpacity
                                 onPress={() => {
-                                  handleSave(mv.key, String(estimated));
+                                  handleSave(mv.key, String(estimated), 1);
                                   setShowCalc(false);
                                 }}
                                 style={{ marginTop: 10, backgroundColor: accentColor, borderRadius: 8, paddingHorizontal: 20, paddingVertical: 10 }}>
