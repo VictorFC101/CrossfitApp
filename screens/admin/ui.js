@@ -99,15 +99,4 @@ export function cardStyle(t) {
 }
 
 // Confirmación multiplataforma (Alert con botones no funciona en web)
-import { Alert, Platform } from 'react-native';
-export function confirmar(titulo, mensaje, textoOk, onOk) {
-  if (Platform.OS === 'web') {
-    // eslint-disable-next-line no-undef
-    if (typeof window !== 'undefined' && window.confirm(`${titulo}\n${mensaje}`)) onOk();
-    return;
-  }
-  Alert.alert(titulo, mensaje, [
-    { text: 'Cancelar', style: 'cancel' },
-    { text: textoOk, style: 'destructive', onPress: onOk },
-  ]);
-}
+export { confirmar } from '../../utils/confirm';

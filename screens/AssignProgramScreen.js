@@ -4,6 +4,7 @@ import { useTheme } from '../ThemeContext';
 import { supabase } from '../supabase';
 import { useProgram } from '../ProgramContext';
 import { parseDateFromDay } from '../dateUtils';
+import { avisar } from '../utils/confirm';
 
 const MESES_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
@@ -187,10 +188,10 @@ const handleAssign = async () => {
         } catch (e) {}
       }
 
-      Alert.alert(
+      avisar(
         '✅ Asignado',
         `Programa asignado a ${selectedUsers.length} usuario${selectedUsers.length > 1 ? 's' : ''} correctamente`,
-        [{ text: 'OK', onPress: onClose }]
+        onClose
       );
     } catch (e) {
       Alert.alert('Error', `No se pudo asignar: ${e.message}`);

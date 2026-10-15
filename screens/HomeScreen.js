@@ -10,6 +10,7 @@ import { CACHE_KEYS } from '../constants';
 import { parseDateFromDay, isToday, isPast, getInitialIdx, isTodayInProgram, getToday, assignDatesFromStart, daySyncKey } from '../dateUtils';
 import { useToday } from '../hooks/useToday';
 import { parsePercent } from '../wodLogic';
+import { confirmar } from '../utils/confirm';
 
 const DIAS = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
 
@@ -275,31 +276,29 @@ export default function HomeScreen({ navigate }) {
 
   const handleRejectProgram = async () => {
     if (!pendingNotif) return;
-    Alert.alert(
+    confirmar(
       'Rechazar programa',
       '¿Seguro que quieres rechazar este programa?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Rechazar', style: 'destructive', onPress: async () => {
-          setProcessingAssign(true);
-          try {
-            const { programa_id } = pendingNotif.data;
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-              await supabase.from('asignaciones')
-                .update({ status: 'rechazado' })
-                .eq('user_id', user.id)
-                .eq('programa_id', programa_id)
-                .eq('status', 'pendiente');
-            }
-            await markAsRead(pendingNotif.id);
-          } catch (e) {
-            Alert.alert('Error', e.message);
-          } finally {
-            setProcessingAssign(false);
+      'Rechazar',
+      async () => {
+        setProcessingAssign(true);
+        try {
+          const { programa_id } = pendingNotif.data;
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            await supabase.from('asignaciones')
+              .update({ status: 'rechazado' })
+              .eq('user_id', user.id)
+              .eq('programa_id', programa_id)
+              .eq('status', 'pendiente');
           }
-        }}
-      ]
+          await markAsRead(pendingNotif.id);
+        } catch (e) {
+          Alert.alert('Error', e.message);
+        } finally {
+          setProcessingAssign(false);
+        }
+      }
     );
   };
 
