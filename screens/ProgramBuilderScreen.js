@@ -5,7 +5,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { parseDateFromDay } from '../dateUtils';
-import { DAY_TYPES, BLOCK_KINDS, BLOCK_KIND_LABELS, SCORE_TYPES, WOD_TYPES, WOD_FORMATS, RM_CATEGORIES, RM_NAMES, TYPE_COLORS } from '../constants';
+import { DAY_TYPES, BLOCK_KINDS, BLOCK_KIND_LABELS, SCORE_TYPES, WOD_TYPES, WOD_FORMATS, RM_CATEGORIES, RM_NAMES, TYPE_COLORS, defaultScoreType } from '../constants';
 import { STRENGTH_KINDS, assembleDay, blockToForm, formToBlock, dayToBuilderBlocks, newFormBlock, summarizeBlock, scoreLabel } from '../builderLogic';
 import { validateProgram, formatValidationIssues } from '../programValidation';
 import { confirmar } from './admin/ui';
@@ -317,7 +317,12 @@ function SmallLabel({ children, t }) {
 
 function BlockCard({ form, index, total, onChange, onMove, onDelete, t }) {
   const set = patch => onChange({ ...form, ...patch });
-  const setWod = patch => onChange({ ...form, wod: { ...form.wod, ...patch } });
+  const setWod = patch => {
+    const wod = { ...form.wod, ...patch };
+    // Si el marcador sigue en el valor por defecto, acompaña al nuevo tipo de WOD
+    const followsDefault = form.scoreType === defaultScoreType(form.kind, form.wod);
+    onChange({ ...form, wod, ...(patch.type && followsDefault ? { scoreType: defaultScoreType(form.kind, wod) } : {}) });
+  };
   const isStrength = STRENGTH_KINDS.includes(form.kind);
   const summary = summarizeBlock(formToBlock(form));
   const iconBtn = (label, onPress, disabled) => (

@@ -243,7 +243,7 @@ function AddJsonModal({ visible, onClose, onSave }) {
       const validation = validateProgram(parsed);
       if (!validation.ok) {
         Alert.alert('Programa no válido', formatValidationIssues(validation.errors, 8));
-        throw new Error(`El programa tiene ${validation.errors.length} error(es): ${validation.errors[0].path}: ${validation.errors[0].msg}`);
+        throw new Error(`El programa tiene ${validation.errors.length} error(es):\n${formatValidationIssues(validation.errors, 8)}`);
       }
       const stripped = stripProgramDates(parsed);
       const accept = () => { setPreview(stripped); setProgramName(stripped.name || ''); setError(''); };
