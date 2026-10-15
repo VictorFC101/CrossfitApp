@@ -118,3 +118,65 @@ describe('rankLeaderboard: scoring del tipo ilegible → inferencia', () => {
     expect(rx[0].user_id).toBe('a');
   });
 });
+
+describe('vista del ranking: formatMark, gapToFirst, detailParts, relativeTime', () => {
+  const { formatMark, gapToFirst, detailParts, relativeTime, effectiveScoring } = require('../leaderboardLogic');
+  test('formatMark rondas con y sin reps', () => {
+    expect(formatMark(r('a', '8+12'), 'rounds')).toEqual({ main: '8 rondas', sub: '+ 12 reps', short: '8+12' });
+    expect(formatMark(r('a', '8+0'), 'rounds')).toEqual({ main: '8 rondas', sub: '', short: '8+0' });
+    expect(formatMark(r('a', '1+1'), 'rounds')).toEqual({ main: '1 ronda', sub: '+ 1 rep', short: '1+1' });
+  });
+  test('formatMark tiempo y reps', () => {
+    expect(formatMark(r('a', '08:45'), 'time')).toEqual({ main: '8:45', sub: 'tiempo', short: '8:45' });
+    expect(formatMark(r('a', '152'), 'reps')).toEqual({ main: '152', sub: 'reps', short: '152' });
+  });
+  test('formatMark ilegible', () => {
+    const nada = { main: 'Ver detalle', sub: '', short: '—' };
+    expect(formatMark(r('a', 'bien'), 'time')).toEqual(nada);
+    expect(formatMark(r('a', '10:00'), null)).toEqual(nada);
+  });
+  const partes = [{ key: 'strength', label: 'FUERZA', resultado: '10 / 20 / 30 / 40' }, { key: 'wod', label: 'WOD', resultado: '2+0 · 10:00' }];
+  test('formatMark con partes reales usa la parte de WOD', () => {
+    expect(formatMark(r('a', 'x', { partes }), 'rounds').short).toBe('2+0');
+  });
+  test('gapToFirst', () => {
+    expect(gapToFirst(r('b', '9+0'), r('a', '10+0'), 'rounds')).toBe('a 1 ronda del 1º');
+    expect(gapToFirst(r('b', '9+0'), r('a', '12+5'), 'rounds')).toBe('a 3 rondas y 5 reps del 1º');
+    expect(gapToFirst(r('b', '9+3'), r('a', '9+4'), 'rounds')).toBe('a 1 rep del 1º');
+    expect(gapToFirst(r('b', '09:20'), r('a', '08:45'), 'time')).toBe('a 0:35 del 1º');
+    expect(gapToFirst(r('b', '140'), r('a', '152'), 'reps')).toBe('a 12 reps del 1º');
+  });
+  test('gapToFirst null', () => {
+    const a = r('a', '10:00');
+    expect(gapToFirst(a, a, 'time')).toBeNull();
+    expect(gapToFirst(r('b', '10:00'), a, 'time')).toBeNull();
+    expect(gapToFirst(r('b', 'bien'), a, 'time')).toBeNull();
+    expect(gapToFirst(r('b', '11:00'), null, 'time')).toBeNull();
+  });
+  test('detailParts excluye la parte de la marca', () => {
+    expect(detailParts(r('a', 'x', { partes }), 'rounds')).toEqual([{ label: 'FUERZA', text: '10 / 20 / 30 / 40' }]);
+  });
+  test('detailParts sin partes: resultado completo', () => {
+    expect(detailParts(r('a', '08:45'), 'time')).toEqual([{ label: '', text: '08:45' }]);
+    expect(detailParts(r('a', ''), 'time')).toEqual([]);
+  });
+  test('detailParts con marca ilegible muestra todas las partes', () => {
+    expect(detailParts(r('a', 'x', { partes }), 'reps')).toHaveLength(2);
+  });
+  test('relativeTime límites', () => {
+    const now = new Date('2026-05-10T12:00:00Z');
+    const hace = (min) => new Date(now.getTime() - min * 60000).toISOString();
+    expect(relativeTime(hace(0), now)).toBe('hace 1 min');
+    expect(relativeTime(hace(59), now)).toBe('hace 59 min');
+    expect(relativeTime(hace(60), now)).toBe('hace 1 h');
+    expect(relativeTime(hace(23 * 60 + 59), now)).toBe('hace 23 h');
+    expect(relativeTime(hace(24 * 60), now)).toBe('ayer');
+    expect(relativeTime(hace(48 * 60), now)).toBe('hace 2 días');
+    expect(relativeTime(null, now)).toBe('');
+    expect(relativeTime('nope', now)).toBe('');
+  });
+  test('effectiveScoring infiere cuando el tipo no lee nada', () => {
+    expect(effectiveScoring([r('a', '5+1'), r('b', '6+0')], 'reps')).toBe('rounds');
+    expect(effectiveScoring([r('a', '10:00')], 'time')).toBe('time');
+  });
+});
