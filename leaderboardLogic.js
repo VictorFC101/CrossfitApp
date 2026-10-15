@@ -1,5 +1,6 @@
 // Lógica pura de la clasificación del box: tipo de puntuación del WOD y ranking.
 import { parseScore, compareScores, formatScore } from './benchmarkLogic';
+import { SCORE, LEGACY_PART_KEYS } from './constants';
 
 // Mayúsculas, "_" como espacio y espacios colapsados
 const norm = (v) => String(v || '').toUpperCase().replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
@@ -28,12 +29,20 @@ export function scoringForWod(wod) {
 
 const RE_S_ROUNDS = /^\d+\+\d+$/;
 const RE_S_TIME = /^\d{1,2}:\d{2}(:\d{2})?$/;
-const RE_S_INT = /^\d+$/;
+const RE_S_INT = /^\d+(?:\s*reps?)?$/i;
+
+// Parte que puntua como WOD: claves legacy 'wod*' o, en dias por bloques, cualquier parte con
+// marca de tiempo/rondas/reps (la carga y la fuerza no cuentan).
+function isWodPart(p) {
+  const key = String(p?.key || '');
+  if (key.startsWith(LEGACY_PART_KEYS.WOD)) return true;
+  return key !== LEGACY_PART_KEYS.STRENGTH && !!p?.scoreType && p.scoreType !== SCORE.LOAD && p.scoreType !== SCORE.NONE;
+}
 
 // Texto de marca de la parte de WOD (la última con contenido); si no hay partes, el resultado
 function wodScoreText(row) {
   if (Array.isArray(row.partes) && row.partes.length) {
-    const wodParts = row.partes.filter(p => String(p.key || '').startsWith('wod') && p.resultado);
+    const wodParts = row.partes.filter(p => isWodPart(p) && p.resultado);
     if (wodParts.length) return wodParts[wodParts.length - 1].resultado;
   }
   return row.resultado;
@@ -67,7 +76,7 @@ export function inferScoringFromResults(rows) {
  */
 export function scoreOfRow(row, scoring) {
   if (Array.isArray(row.partes) && row.partes.length) {
-    const wodParts = row.partes.filter(p => String(p.key || '').startsWith('wod'));
+    const wodParts = row.partes.filter(isWodPart);
     for (let i = wodParts.length - 1; i >= 0; i--) {
       const s = parseScore(wodParts[i].resultado, scoring);
       if (s != null) return s;
@@ -115,7 +124,7 @@ function markPartIndex(row, scoring) {
   if (Array.isArray(row.partes) && row.partes.length) {
     for (let i = row.partes.length - 1; i >= 0; i--) {
       const p = row.partes[i];
-      if (String(p.key || '').startsWith('wod') && parseScore(p.resultado, scoring) != null) return i;
+      if (isWodPart(p) && parseScore(p.resultado, scoring) != null) return i;
     }
   }
   return -1;

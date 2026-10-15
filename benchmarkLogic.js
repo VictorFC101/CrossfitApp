@@ -1,5 +1,7 @@
 // Lógica pura de benchmarks: detección, parseo de marcas, comparación e historial.
 import { BENCHMARKS, BENCHMARK_ALIASES, getBenchmark } from './benchmarks';
+import { SCORE } from './constants';
+import { parsePartResult } from './resultLogic';
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
@@ -45,14 +47,21 @@ const RE_TIME = /^(\d{1,2}):(\d{2})$/;
 const RE_TIME_H = /^(\d+):(\d{2}):(\d{2})$/;
 const RE_ROUNDS = /^(\d+)\+(\d+)$/;
 const RE_INT = /^\d+$/;
+const RE_REPS = /^(\d+)\s*(?:reps?)?$/i; // "50" o "50 reps" (formato de PartResultInput)
+const RE_LABEL_PREFIX = /^[^\d:][^:]*:\s+/; // "WOD: " de resumenes multiparte
 
 /**
  * Convierte el texto de resultado en un número comparable:
- * time -> segundos; rounds -> rondas*1000 + reps; reps -> reps. null si no se entiende.
+ * time -> segundos; rounds -> rondas*1000 + reps; reps -> reps; load -> kg de la mejor serie
+ * (mayor es mejor). null si no se entiende.
  */
 export function parseScore(resultado, scoring) {
   if (!resultado || typeof resultado !== 'string') return null;
-  const partes = resultado.split(' · ').map(s => s.trim()).filter(Boolean);
+  if (scoring === SCORE.LOAD) {
+    const v = parsePartResult(SCORE.LOAD, resultado);
+    return v ? v.kg : null;
+  }
+  const partes = resultado.split(' · ').map(s => s.trim().replace(RE_LABEL_PREFIX, '')).filter(Boolean);
   for (const p of partes) {
     if (scoring === 'time') {
       let m = RE_TIME_H.exec(p);
@@ -64,7 +73,8 @@ export function parseScore(resultado, scoring) {
       if (m) return (+m[1]) * 1000 + (+m[2]);
       if (RE_INT.test(p)) return parseInt(p, 10) * 1000; // solo rondas completas
     } else if (scoring === 'reps') {
-      if (RE_INT.test(p)) return parseInt(p, 10);
+      const m = RE_REPS.exec(p);
+      if (m) return parseInt(m[1], 10);
     }
   }
   return null;
@@ -86,6 +96,7 @@ export function formatScore(score, scoring) {
     return h > 0 ? `${h}:${pad2(m)}:${pad2(s)}` : `${m}:${pad2(s)}`;
   }
   if (scoring === 'rounds') return `${Math.floor(score / 1000)}+${score % 1000}`;
+  if (scoring === SCORE.LOAD) return `${score} kg`;
   return `${score} reps`;
 }
 
@@ -106,6 +117,7 @@ export function formatDelta(aScore, bScore, scoring) {
     if (rep) partes.push(`${rep} ${rep === 1 ? 'rep' : 'reps'}`);
     return `${signo}${partes.join(' y ')}`;
   }
+  if (scoring === SCORE.LOAD) return `${signo}${Math.round(abs * 100) / 100} kg`;
   return `${signo}${abs} ${abs === 1 ? 'rep' : 'reps'}`;
 }
 

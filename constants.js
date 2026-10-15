@@ -74,6 +74,70 @@ export const TYPE_COLORS = {
   Gimnásticos:   '#52b788',
 };
 
+// Tipos de día permitidos (formato de programa). Mantener aquí: no repetir literales.
+export const DAY_TYPES = ['Halterofilia', 'Fuerza', 'Powerlifting', 'Gimnásticos', 'Libre'];
+
+// Tipos de bloque de un día (schema v2)
+export const BLOCK_KINDS = ['warmup', 'strength', 'lift', 'wod', 'accessory', 'skill', 'free'];
+
+// Tipos de marcador (cómo se registra el resultado de un bloque)
+export const SCORE_TYPES = ['time', 'rounds_reps', 'load', 'reps', 'none'];
+
+// Nombres de los tipos de marcador (evita literales repetidos)
+export const SCORE = { TIME: 'time', ROUNDS_REPS: 'rounds_reps', LOAD: 'load', REPS: 'reps', NONE: 'none' };
+
+// Claves legacy de las partes guardadas en resultados.partes (resultados antiguos)
+export const LEGACY_PART_KEYS = { STRENGTH: 'strength', WOD: 'wod', WOD_PART_PREFIX: 'wod_' };
+
+// Colores del selector Rx / Scaled
+export const RX_COLORS = { RX: '#52b788', SCALED: '#f4a261' };
+
+// Separador entre fragmentos de un resultado de texto ("5+12 · 14:30")
+export const RESULT_SEPARATOR = ' · ';
+
+// Marcador por defecto según el tipo de bloque (el wod se deriva de wod.type)
+export const DEFAULT_SCORE_BY_KIND = {
+  warmup: 'none',
+  strength: 'load',
+  lift: 'load',
+  wod: 'time',
+  accessory: 'none',
+  skill: 'none',
+  free: 'none',
+};
+
+export function defaultScoreType(kind, wod) {
+  if (kind === 'wod') {
+    const t = String(wod?.type || '').toUpperCase();
+    if (t.includes('AMRAP')) return 'rounds_reps';
+    if (t.includes('FOR TIME')) return 'time';
+    // Tipos desconocidos (EMOM, intervalos...): rondas+reps y tiempo opcional, como antes
+    return 'rounds_reps';
+  }
+  return DEFAULT_SCORE_BY_KIND[kind] || 'none';
+}
+
+// Alias en español para detectar movimientos en texto libre → rmKey existente.
+// De más a menos específico (se evalúan en orden). Texto en minúsculas.
+export const RM_ALIASES_ES = [
+  [/cargada\s*(&|y)\s*(env[ií][oó]n|dos tiempos)/, 'cj'],
+  [/(env[ií][oó]n|dos tiempos)/, 'cj'],
+  [/sentadilla\s+(frontal|delantera)/, 'fs'],
+  [/sentadilla\s+(trasera|atr[aá]s)/, 'bs'],
+  [/sentadilla\s+(overhead|por encima de la cabeza)/, 'ohs'],
+  [/cargada\s+de\s+potencia/, 'pc'],
+  [/arrancada\s+de\s+potencia/, 'ps'],
+  [/cargada\s+colgante/, 'hc'],
+  [/press\s+(militar|estricto)/, 'sp'],
+  [/press\s+(de\s+)?banca/, 'bp'],
+  [/press\s+de\s+empuje/, 'pp'],
+  [/peso\s+muerto\s+rumano/, 'rmd'],
+  [/peso\s+muerto/, 'dl'],
+  [/empuje\s+de\s+cadera/, 'ht'],
+  [/arrancada/, 'sn'],
+  [/cargada/, 'clean'],
+];
+
 // Claves de caché offline (F1). Se borran al cerrar sesión para no filtrar datos entre usuarios.
 export const CACHE_KEYS = {
   USER_PROFILE: '@crossfit_user_profile',
@@ -107,6 +171,18 @@ export const STORAGE_KEYS = {
   HAS_ASIGNACION: CACHE_KEYS.HAS_ASIGNACION,
 };
 
+// Tipos de WOD y formatos de equipo del constructor de programas (no repetir literales)
+export const WOD_TYPES = ['AMRAP', 'FOR TIME', 'EMOM', 'INTERVALOS', 'STRENGTH', 'LIBRE'];
+export const WOD_FORMATS = ['YOU GO I GO', 'A REPARTIR LIBREMENTE', 'SYNCHRO', 'INDIVIDUAL', 'EQUIPOS'];
+
+// Etiquetas en español de los tipos de bloque y de marcador (UI del constructor)
+export const BLOCK_KIND_LABELS = {
+  warmup: 'Calentamiento', strength: 'Fuerza', lift: 'Halterofilia', wod: 'WOD',
+  accessory: 'Accesorios', skill: 'Técnica', free: 'Libre',
+};
+export const SCORE_TYPE_LABELS = {
+  time: 'Tiempo', rounds_reps: 'Rondas + reps', load: 'Carga', reps: 'Repeticiones', none: 'Sin marcador',
+};
 // Vista de coach: umbrales de actividad (días desde el último registro)
 export const COACH_ACTIVO_DIAS = 3;
 export const COACH_INACTIVO_DIAS = 7;

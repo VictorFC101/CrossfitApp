@@ -1,0 +1,111 @@
+{
+  "name": "Halterofilia Octubre — Semana 1",
+  "weeks": [
+    {
+      "days": [
+        {
+          "day": "Lunes 12 Oct",
+          "date": "2026-10-12",
+          "type": "Halterofilia",
+          "label": "ARRANCADA + SENTADILLA FRONTAL",
+          "blocks": [
+            {
+              "id": "b1", "kind": "warmup", "title": "Calentamiento",
+              "items": ["5 min remo suave", "2 rondas: 10 good mornings + 10 sentadillas overhead con palo + 5 arrancadas con palo", "Movilidad de hombro y cadera"]
+            },
+            {
+              "id": "b2", "kind": "lift", "title": "Snatch Pull + Snatch",
+              "rmKeys": ["sn"], "rest": "2 min", "notes": "Tirón completo, recepción estable. Sube solo si la técnica es limpia.",
+              "prescription": [
+                { "sets": 5, "complex": [{ "movement": "Snatch Pull", "reps": 1 }, { "movement": "Snatch", "reps": 1 }], "load": { "pctMin": 70, "pctMax": 75 }, "rmKey": "sn" }
+              ],
+              "score": { "type": "load" }
+            },
+            {
+              "id": "b3", "kind": "strength", "title": "Sentadilla frontal",
+              "rmKeys": ["fs"], "rest": "3 min",
+              "prescription": [
+                { "desc": "5×3 @ 80%", "sets": 5, "reps": 3, "load": { "pct": 80 }, "tempo": "21X1", "rmKey": "fs" }
+              ],
+              "score": { "type": "load" }
+            },
+            {
+              "id": "b4", "kind": "accessory", "title": "Accesorios",
+              "items": ["3×10 Press estricto con mancuernas", "3×12 Remo con barra", "3×30 s Plancha"]
+            }
+          ]
+        },
+        {
+          "day": "Martes 13 Oct",
+          "date": "2026-10-13",
+          "type": "Halterofilia",
+          "label": "CARGADA Y ENVIÓN",
+          "blocks": [
+            {
+              "id": "b1", "kind": "warmup", "title": "Calentamiento",
+              "items": ["5 min bici", "2 rondas: 8 cargadas con palo + 8 sentadillas frontales con palo + 5 push press"]
+            },
+            {
+              "id": "b2", "kind": "lift", "title": "Cargada y envión",
+              "rmKeys": ["cj"], "rest": "2 min 30 s",
+              "prescription": [
+                { "desc": "6×(1 cargada + 1 envión) @ 75-80%", "sets": 6, "complex": [{ "movement": "Cargada", "reps": 1 }, { "movement": "Envión", "reps": 1 }], "load": { "pctMin": 75, "pctMax": 80 }, "rmKey": "cj" }
+              ],
+              "score": { "type": "load" }
+            },
+            {
+              "id": "b3", "kind": "strength", "title": "Peso muerto",
+              "rmKeys": ["dl"], "rest": "3 min",
+              "prescription": [
+                { "desc": "4×4 @ RPE 8", "sets": 4, "reps": 4, "load": { "rpe": 8 }, "rmKey": "dl" }
+              ]
+            },
+            {
+              "id": "b4", "kind": "wod", "title": "Finisher",
+              "wod": {
+                "type": "FOR TIME", "duration": "8 min", "format": "FOR TIME",
+                "formatNote": "Time cap 8 min",
+                "movements": [
+                  { "reps": "21-15-9", "name": "Thrusters", "weight": "40/30 kg" },
+                  { "reps": "21-15-9", "name": "Pull-ups", "weight": "" }
+                ]
+              },
+              "score": { "type": "time" }
+            }
+          ]
+        },
+        {
+          "day": "Jueves 15 Oct",
+          "date": "2026-10-15",
+          "type": "Halterofilia",
+          "label": "ARRANCADA DE POTENCIA + TIRONES",
+          "blocks": [
+            {
+              "id": "b1", "kind": "warmup", "title": "Calentamiento",
+              "items": ["5 min remo", "Técnica de arrancada con palo: 3×5", "Movilidad de tobillo y torácica"]
+            },
+            {
+              "id": "b2", "kind": "lift", "title": "Power Snatch",
+              "rmKeys": ["ps"], "rest": "2 min",
+              "prescription": [
+                { "desc": "4×2 @ 70%", "sets": 4, "reps": 2, "load": { "pct": 70 }, "rmKey": "ps" },
+                { "desc": "3×2 @ 75%", "sets": 3, "reps": 2, "load": { "pct": 75 }, "rmKey": "ps" }
+              ]
+            },
+            {
+              "id": "b3", "kind": "strength", "title": "Sentadilla trasera",
+              "rmKeys": ["bs"], "rest": "3 min",
+              "prescription": [
+                { "desc": "5×5 @ 75%", "sets": 5, "reps": 5, "load": { "pct": 75 }, "rmKey": "bs" }
+              ]
+            },
+            {
+              "id": "b4", "kind": "accessory", "title": "Core y espalda",
+              "items": ["3×12 Extensiones de espalda", "3×15 Elevaciones de piernas colgado"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

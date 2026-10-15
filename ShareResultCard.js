@@ -6,7 +6,7 @@ export function ShareResultCard({ shareable, acento }) {
   const { title, dateLabel, typeLabel, durationLabel, movements, resultado, resultParts, chip, notas, breakdown } = shareable;
   const { time: timePart, rounds: ron, reps: rep } = resultParts;
   const roundsSeg  = ron ? `${ron}+${rep}` : '';
-  const hasBreakdown = (breakdown || []).length >= 2;
+  const hasBreakdown = (breakdown || []).length >= 1;
   const hasParsed = !!(timePart || roundsSeg);
   const isRx = chip === 'RX';
   const isLibre = chip === 'LIBRE';

@@ -161,3 +161,18 @@ describe('fromWodLibre', () => {
     expect(n.dateLabel).toBe('20 Ago 2026');
   });
 });
+
+describe('fromProgramDay con bloques lift', () => {
+  const day = {
+    day: 'Lunes 14 Sep', label: 'Snatch day', type: 'Halterofilia',
+    blocks: [{ id: 'l1', kind: 'lift', title: 'Snatch', prescription: [{ desc: '3×2' }] }],
+  };
+  it('incluye el título del lift como movimiento y muestra el resultado de la parte', () => {
+    const n = fromProgramDay(day, {
+      resultado: 'SNATCH: 100 kg × 3', rx: true,
+      partes: [{ key: 'l1', label: 'SNATCH', scoreType: 'load', value: { kg: 100, reps: 3 }, resultado: '100 kg × 3' }],
+    });
+    expect(n.movements.map(m => m.name)).toEqual(['Snatch']);
+    expect(n.breakdown).toEqual([{ label: 'SNATCH', resultado: '100 kg × 3' }]);
+  });
+});

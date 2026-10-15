@@ -97,7 +97,10 @@ describe('normalizeProgramDays / enrichProgram', () => {
   it('normaliza todos los días sin mutar el original', () => {
     const out = normalizeProgramDays(program);
     expect(out.weeks[0].days[0].strength.sets).toHaveLength(3);
-    expect(out.weeks[0].days[1]).toBe(legacy);
+    const { blocks, blocksSource, ...rest } = out.weeks[0].days[1];
+    expect(rest).toEqual(legacy); // campos legacy intactos; solo se añaden blocks y blocksSource
+    expect(blocksSource).toBe('legacy');
+    expect(Array.isArray(blocks)).toBe(true);
     expect(program.weeks[0].days[0].strength.sets).toBeUndefined();
   });
   it('enrichProgram devuelve días con sets y es idempotente', () => {

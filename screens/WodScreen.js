@@ -11,8 +11,15 @@ import { RM_CATEGORIES, COACH_NOTAS_HINT } from '../constants';
 import { getBenchmark } from '../benchmarks';
 import { detectDayBenchmark, getBenchmarkHistory, evaluateNewMark } from '../benchmarkLogic';
 import BenchmarkCard from './BenchmarkCard';
+import DayBlocks from '../components/DayBlocks';
+import PartResultInput from '../components/PartResultInput';
+import { getDayBlocks } from '../dayBlocksLogic';
+import { SCORE } from '../constants';
+import {
+  getScorableParts, isSingleLegacyWod, partStateFromSaved, buildPartItem, partHasData, summarizeParts, bestLoadOfResultado,
+} from '../resultLogic';
+import { RM_KEY_NAMES, RM_NAME_PATTERNS, inferRmKeysFromText, getEffectiveRM } from '../wodLogic';
 import LeaderboardCard from './LeaderboardCard';
-import { RM_KEY_NAMES, RM_NAME_PATTERNS, inferRmKeysFromText, getEffectiveRM, parsePercent } from '../wodLogic';
 
 
 const TYPE_COLORS = {
@@ -47,7 +54,17 @@ function ProgressStrip({ resultados, currentDayKey, day, allDaysFlat, t }) {
   const dayRmKeyMap = {};
   (allDaysFlat || []).forEach(d => { dayRmKeyMap[d.day] = d.rmKey || null; });
 
-  const entries = Object.entries(resultados)
+  // Día de carga: se compara la mejor serie (kg) de resultados pasados con el mismo rmKey
+  const isLoadDay = getScorableParts(day).some(p => p.scoreType === SCORE.LOAD);
+  const loadEntries = isLoadDay ? Object.entries(resultados)
+    .filter(([k, v]) => k !== currentDayKey && v?.fecha && dayRmKeyMap[k] === day.rmKey)
+    .map(([k, v]) => ({ key: k, fecha: v.fecha, rx: v.rx !== false, best: bestLoadOfResultado(v) }))
+    .filter(e => e.best)
+    .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+    .slice(0, 4)
+    .reverse() : [];
+
+  const entries = isLoadDay ? loadEntries.map(e => ({ key: e.key, resultado: e.best.text, fecha: e.fecha, rx: e.rx, loadN: e.best.kg })) : Object.entries(resultados)
     .filter(([k, v]) => k !== currentDayKey && v?.resultado && dayRmKeyMap[k] === day.rmKey)
     .map(([k, v]) => {
       const segs = (v.resultado || '').split(' · ');
@@ -76,7 +93,11 @@ function ProgressStrip({ resultados, currentDayKey, day, allDaysFlat, t }) {
   const hasTime   = entries.some(e => e.timePart);
 
   let scores;
-  if (hasRounds) {
+  if (isLoadDay) {
+    const vals = entries.map(e => e.loadN);
+    const mn = Math.min(...vals), mx = Math.max(...vals);
+    scores = vals.map(v => mx === mn ? 70 : 20 + 60 * (v - mn) / (mx - mn));
+  } else if (hasRounds) {
     const vals = entries.map(e => e.rondasN ?? 0);
     const mn = Math.min(...vals), mx = Math.max(...vals);
     scores = vals.map(v => mx === mn ? 70 : 20 + 60 * (v - mn) / (mx - mn));
@@ -220,108 +241,6 @@ function AdaptModal({ visible, originalMovements, adaptacion, hasAdaptacion, onS
   );
 }
 
-// ── Detectar bloques guardables del día ──────────────────────
-function getDayParts(day) {
-  if (!day) return [];
-  const parts = [];
-  if (day.strength?.sets?.length) {
-    parts.push({ key: 'strength', label: 'FUERZA', isStrength: true });
-  }
-  if (day.wod && day.type !== 'Libre') {
-    if (day.wod.parts?.length >= 1) {
-      day.wod.parts.forEach((p, i) => {
-        parts.push({ key: `wod_${i}`, label: p.label || `WOD ${i + 1}`, type: p.type, duration: p.duration });
-      });
-    } else {
-      parts.push({ key: 'wod', label: 'WOD', type: day.wod.type, duration: day.wod.duration });
-    }
-  }
-  return parts.length >= 2 ? parts : [];
-}
-
-// ── Tarjeta de resultado para un bloque individual ────────────
-function PartResultCard({ part, pr = {}, onChange, t }) {
-  const isRx = pr.rx !== false;
-  const gbg = t.dark ? '#06100a' : '#e8f5e9';
-  const gborder = t.dark ? '#2e6e3250' : '#c8e6c9';
-  const ibg = t.dark ? '#080e0a' : '#fff';
-  const iborder = t.dark ? '#1a3a1e' : '#c8e6c9';
-  const icolor = t.dark ? '#81c784' : '#2e7d32';
-  const ph = t.dark ? '#2a4a2e' : '#81c784';
-  const lbl = { fontSize: t.fs(9), color: '#4caf50', letterSpacing: 2, fontWeight: '700', marginBottom: 6, textAlign: 'center' };
-  const inp = { backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, color: icolor, fontWeight: '700', padding: 12, textAlign: 'center', fontSize: t.fs(32) };
-
-  return (
-    <View style={{ backgroundColor: gbg, borderWidth: 1, borderColor: gborder, borderRadius: 10, padding: 14, marginBottom: 10 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <Text style={{ fontSize: t.fs(11), fontWeight: '700', color: '#4caf50', letterSpacing: 1 }}>
-          {part.isStrength ? '💪 ' : '⚡ '}{part.label}
-        </Text>
-        {!part.isStrength && part.type && (
-          <View style={{ backgroundColor: '#4caf5015', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
-            <Text style={{ fontSize: t.fs(8), color: '#4caf50', fontWeight: '700' }}>
-              {part.type}{part.duration ? ` · ${part.duration}` : ''}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-        <TouchableOpacity onPress={() => onChange({ rx: true })}
-          style={{ flex: 1, backgroundColor: isRx ? '#52b78820' : ibg, borderWidth: 1.5, borderColor: isRx ? '#52b788' : iborder, borderRadius: 8, padding: 8, alignItems: 'center' }}>
-          <Text style={{ fontSize: t.fs(12), fontWeight: '900', color: isRx ? '#52b788' : ph }}>Rx</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => onChange({ rx: false })}
-          style={{ flex: 1, backgroundColor: !isRx ? '#f4a26120' : ibg, borderWidth: 1.5, borderColor: !isRx ? '#f4a261' : iborder, borderRadius: 8, padding: 8, alignItems: 'center' }}>
-          <Text style={{ fontSize: t.fs(12), fontWeight: '900', color: !isRx ? '#f4a261' : ph }}>Scaled</Text>
-        </TouchableOpacity>
-      </View>
-
-      {part.isStrength ? (
-        <TextInput value={pr.resultado || ''} onChangeText={v => onChange({ resultado: v })}
-          placeholder="Ej: 5×80kg" placeholderTextColor={ph}
-          style={{ ...inp, fontSize: t.fs(22), marginBottom: 12 }} />
-      ) : (
-        <>
-          <Text style={[lbl, { marginBottom: 8 }]}>TIEMPO</Text>
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={lbl}>MIN</Text>
-              <TextInput value={pr.minutos || ''} onChangeText={v => onChange({ minutos: v })} keyboardType="numeric" placeholder="00" placeholderTextColor={ph} style={inp} />
-            </View>
-            <View style={{ alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 }}>
-              <Text style={{ fontSize: t.fs(22), color: '#4caf50', fontWeight: '900' }}>:</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={lbl}>SEG</Text>
-              <TextInput value={pr.segundos || ''} onChangeText={v => onChange({ segundos: v })} keyboardType="numeric" placeholder="00" placeholderTextColor={ph} style={inp} />
-            </View>
-          </View>
-          <Text style={[lbl, { marginBottom: 8 }]}>RONDAS + REPS</Text>
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={lbl}>RONDAS</Text>
-              <TextInput value={pr.rondas || ''} onChangeText={v => onChange({ rondas: v })} keyboardType="numeric" placeholder="0" placeholderTextColor={ph} style={inp} />
-            </View>
-            <View style={{ alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 }}>
-              <Text style={{ fontSize: t.fs(22), color: '#4caf50', fontWeight: '900' }}>+</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={lbl}>REPS</Text>
-              <TextInput value={pr.repsExtra || ''} onChangeText={v => onChange({ repsExtra: v })} keyboardType="numeric" placeholder="0" placeholderTextColor={ph} style={inp} />
-            </View>
-          </View>
-        </>
-      )}
-
-      <TextInput value={pr.notas || ''} onChangeText={v => onChange({ notas: v })}
-        placeholder="Notas..." placeholderTextColor={ph} multiline numberOfLines={2}
-        style={{ backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, color: icolor, fontSize: t.fs(13), padding: 12, textAlignVertical: 'top' }} />
-      <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: 4 }}>{COACH_NOTAS_HINT}</Text>
-    </View>
-  );
-}
-
 function detectFormat(wod) {
   if (!wod) return 'text';
   if (wod.emomMinutes) return 'emom';
@@ -361,7 +280,9 @@ export default function WodScreen({ navigate }) {
   const day = allDaysFlat.length > 0 ? getTodayDay(allDaysFlat) : null;
 
   const savedResult = day ? resultados[day.day] : null;
-  const dayParts = getDayParts(day);
+  const scorableParts = getScorableParts(day);
+  // Un único WOD legacy mantiene el formulario único (TIEMPO + RONDAS); el resto, por parte
+  const dayParts = scorableParts.length >= 1 && !isSingleLegacyWod(scorableParts) ? scorableParts : [];
   const dayBenchmark = detectDayBenchmark(day);
 
   useEffect(() => {
@@ -378,23 +299,16 @@ export default function WodScreen({ navigate }) {
     if (timePart) { const [min, sec] = timePart.split(':'); setMinutos(min || ''); setSegundos(sec || ''); }
     else { setMinutos(''); setSegundos(''); }
     // Inicializar resultados de partes si el día tiene bloques múltiples
-    const parts = getDayParts(day);
-    if (parts.length >= 2) {
+    if (dayParts.length >= 1) {
+      const savedPartes = savedResult?.partes || [];
       const init = {};
-      parts.forEach(p => {
-        const saved = (savedResult?.partes || []).find(s => s.key === p.key);
-        const pr = { resultado: '', minutos: '', segundos: '', rondas: '', repsExtra: '', notas: '', rx: true };
-        if (saved) {
-          pr.resultado = saved.resultado || '';
-          pr.notas = saved.notas || '';
-          pr.rx = saved.rx !== false;
-          const ss = (saved.resultado || '').split(' · ');
-          const rp = ss.find(s => /^\d+\+\d+$/.test(s.trim()));
-          const tp = ss.find(s => /^\d{1,2}:\d{2}$/.test(s.trim()));
-          if (rp) { const [ron, rep] = rp.split('+'); pr.rondas = ron || ''; pr.repsExtra = rep || ''; }
-          if (tp) { const [min, sec] = tp.split(':'); pr.minutos = min || ''; pr.segundos = sec || ''; }
+      dayParts.forEach(p => {
+        let saved = savedPartes.find(s => s.key === p.key);
+        // Resultado único antiguo (sin partes) en un día de una sola parte: no se pierde
+        if (!saved && !savedPartes.length && dayParts.length === 1 && savedResult?.resultado) {
+          saved = { resultado: savedResult.resultado, notas: savedResult.notas, rx: savedResult.rx };
         }
-        init[p.key] = pr;
+        init[p.key] = partStateFromSaved(p, saved);
       });
       setPartResults(init);
     }
@@ -405,22 +319,9 @@ export default function WodScreen({ navigate }) {
 
   const guardarPartes = async () => {
     if (!day) return;
-    const parts = getDayParts(day);
-    const partes = parts.map(p => {
-      const pr = partResults[p.key] || {};
-      let resultado;
-      if (p.isStrength) {
-        resultado = pr.resultado || '';
-      } else {
-        const tp = pr.minutos ? `${pr.minutos.padStart(2,'0')}:${(pr.segundos||'00').padStart(2,'0')}` : '';
-        const rp = pr.rondas ? `${pr.rondas}+${pr.repsExtra || '0'}` : '';
-        resultado = [rp, tp].filter(Boolean).join(' · ');
-      }
-      return { key: p.key, label: p.label, resultado, notas: pr.notas || '', rx: pr.rx !== false };
-    });
-    const summary = partes.map(p => `${p.label}: ${p.resultado || '—'}`).join(' · ');
+    const partes = dayParts.map(p => buildPartItem(p, partResults[p.key]));
     await saveResultado(day.day, {
-      resultado: summary, notas: '', fecha: new Date().toISOString(),
+      resultado: summarizeParts(partes), notas: '', fecha: new Date().toISOString(),
       rx: partes.every(p => p.rx), adaptacion, partes, programa_id: activeProgram?.id ?? null,
     });
     setSaved(true);
@@ -456,7 +357,7 @@ export default function WodScreen({ navigate }) {
   const LABEL_TO_RMKEY = { 'back squat': 'bs', 'front squat': 'fs', 'deadlift': 'dl', 'strict press': 'sp', 'push press': 'sp', 'snatch': 'sn', 'clean': 'cj' };
   const inferredRmKey = day?.label ? (Object.entries(LABEL_TO_RMKEY).find(([k]) => day.label.toLowerCase().includes(k))?.[1] || null) : null;
   const effectiveDay = day ? { ...day, rmKey: day.rmKey || inferredRmKey || 'cj' } : day;
-  const { rmKey, rmVal, hasRM, isComplex, limitName } = getEffectiveRM(effectiveDay, rms);
+  const { rmKey } = getEffectiveRM(effectiveDay, rms);
 
   const timePart_   = minutos ? `${minutos.padStart(2,'0')}:${(segundos||'00').padStart(2,'0')}` : '';
   const roundsPart_ = rondas  ? `${rondas}+${repsExtra || '0'}` : '';
@@ -464,7 +365,9 @@ export default function WodScreen({ navigate }) {
   const hasResult = !!currentResult;
 
   const effectiveWod = day?.wod ? applyAdaptacion(day.wod, adaptacion) : day?.wod;
-  const adaptedDay   = day ? { ...day, wod: effectiveWod } : day;
+  const adaptedBlocks = day ? getDayBlocks(day).map(b => (b?.kind === 'wod' && b.wod ? { ...b, wod: applyAdaptacion(b.wod, adaptacion) } : b)) : undefined;
+  const adaptedDay   = day ? { ...day, wod: effectiveWod, blocks: adaptedBlocks } : day;
+  const firstWodBlock = adaptedBlocks?.find(b => b?.kind === 'wod' && b.wod);
   const hasAdaptacion = !!(adaptacion?.movements?.length);
 
   // ── NO HAY WOD HOY ──────────────────────────────────────────
@@ -527,7 +430,7 @@ export default function WodScreen({ navigate }) {
         <Text style={{ fontSize: t.fs(28), fontWeight: '900', letterSpacing: 2, color: t.text }}>{day.label}</Text>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
           <View style={{ backgroundColor: typeColor(day.type, t.accent) + '20', borderWidth: 1, borderColor: typeColor(day.type, t.accent) + '40', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 }}>
-            <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: typeColor(day.type, t.accent), letterSpacing: 1 }}>🏋️ {day.type.toUpperCase()}</Text>
+            <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: typeColor(day.type, t.accent), letterSpacing: 1 }}>🏋️ {(day.type || 'Entrenamiento').toUpperCase()}</Text>
           </View>
           {day.wod?.type && (
             <View style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 }}>
@@ -539,200 +442,29 @@ export default function WodScreen({ navigate }) {
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 60 }}>
 
-        {/* CALENTAMIENTO */}
-        {day.warmup?.length > 0 && (
-          <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.accent + '30', borderRadius: 10, padding: 14, marginBottom: 10 }}>
-            <Text style={{ fontSize: t.fs(12), fontWeight: '700', letterSpacing: 2, color: t.accent, marginBottom: 12 }}>🔥 CALENTAMIENTO</Text>
-            {day.warmup.map((item, i) => (
-              <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent + '60', borderRadius: 8, padding: 10, marginBottom: 6 }}>
-                <View style={{ width: 22, height: 22, borderRadius: 4, backgroundColor: t.accent + '20', borderWidth: 1, borderColor: t.accent + '40', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
-                  <Text style={{ fontSize: t.fs(10), color: t.accent, fontWeight: '700' }}>{i + 1}</Text>
-                </View>
-                <Text style={{ flex: 1, fontSize: t.fs(13), color: t.text, lineHeight: t.fs(19) }}>{item}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* FUERZA */}
-        {day.strength && (
-          <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.accent + '30', borderRadius: 10, padding: 14, marginBottom: 10 }}>
-            <Text style={{ fontSize: t.fs(12), fontWeight: '700', letterSpacing: 2, color: t.accent, marginBottom: 12 }}>💪 FUERZA / TÉCNICA</Text>
-            <View style={{ backgroundColor: t.accent + '10', borderWidth: 1, borderColor: t.accent + '25', borderRadius: 8, padding: 12, marginBottom: 12 }}>
-              <Text style={{ fontSize: t.fs(10), color: t.accent, letterSpacing: 2, fontWeight: '700', marginBottom: 6 }}>
-                {isComplex && limitName ? `TU ${limitName} 1RM` : `TU ${day.label} 1RM`}
+        {/* BLOQUES DEL DÍA (calentamiento, fuerza/lift, WOD, accesorios...) */}
+        <DayBlocks
+          day={adaptedDay}
+          rms={rms}
+          fallbackRmKey={rmKey}
+          rmSummary
+          onAddRM={() => navigate('RM')}
+          adaptacion={adaptacion}
+          wodHeaderRight={(block) => (block === firstWodBlock && originalMovements.length > 0 ? (
+            <TouchableOpacity onPress={() => setShowAdaptModal(true)}
+              style={{ backgroundColor: hasAdaptacion ? t.accent + '20' : t.bg4, borderWidth: 1, borderColor: hasAdaptacion ? t.accent : t.border, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 }}>
+              <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: hasAdaptacion ? t.accent : t.text3 }}>
+                {hasAdaptacion ? '✏️ Adaptado' : '✏️ Adaptar'}
               </Text>
-              {hasRM ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Text style={{ fontSize: t.fs(28), fontWeight: '900', color: t.accent }}>
-                    {rmVal}<Text style={{ fontSize: t.fs(14), color: t.text2 }}> kg</Text>
-                  </Text>
-                  <Text style={{ fontSize: t.fs(11), color: t.text2, flex: 1 }}>
-                    {`65%→${Math.round(rmVal * 0.65)}kg  ·  72%→${Math.round(rmVal * 0.72)}kg  ·  78%→${Math.round(rmVal * 0.78)}kg`}
-                  </Text>
-                </View>
-              ) : isComplex ? (
-                <TouchableOpacity onPress={() => navigate('RM')}
-                  style={{ backgroundColor: t.accent + '15', borderWidth: 1, borderColor: t.accent + '30', borderRadius: 8, padding: 10, alignItems: 'center' }}>
-                  <Text style={{ fontSize: t.fs(12), color: t.accent, fontWeight: '700' }}>+ Añadir tus 1RM de {day.label.split('+').map(s => s.trim()).join(' y ')} →</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity onPress={() => navigate('RM')}
-                  style={{ backgroundColor: t.accent + '15', borderWidth: 1, borderColor: t.accent + '30', borderRadius: 8, padding: 10, alignItems: 'center' }}>
-                  <Text style={{ fontSize: t.fs(12), color: t.accent, fontWeight: '700' }}>+ Añadir tu 1RM →</Text>
-                </TouchableOpacity>
-              )}
-              {isComplex && hasRM && (
-                <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: 6, fontStyle: 'italic' }}>
-                  Complejo: el % se calcula sobre el RM más bajo de los dos movimientos ({limitName}).
-                </Text>
-              )}
-            </View>
-            {(day.strength.sets || []).map((s, i) => {
-              const p = parsePercent(s.desc);
-              // RM propio de la serie (bloques de otro movimiento); si no lo tiene, el del día
-              const setRm = parseFloat(rms[s.rmKey]);
-              const setHasRM = setRm > 0 ? true : hasRM;
-              const setRmVal = setRm > 0 ? setRm : rmVal;
-              return (
-                <View key={i} style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, padding: 10, marginBottom: 8 }}>
-                  <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <View style={{ width: 22, height: 22, borderRadius: 4, backgroundColor: t.accent + '20', borderWidth: 1, borderColor: t.accent + '40', alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontSize: t.fs(10), color: t.accent, fontWeight: '700' }}>{i + 1}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>
-                        {s.desc}{setHasRM && p ? ` → ${Math.round(setRmVal * p / 100)}kg` : ''}
-                      </Text>
-                      {s.note && <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 3 }}>{s.note}</Text>}
-                      {p && (
-                        <View style={{ marginTop: 6, height: 3, backgroundColor: t.border, borderRadius: 2 }}>
-                          <View style={{ height: 3, width: `${p}%`, backgroundColor: t.accent, borderRadius: 2 }} />
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </View>
-              );
-            })}
-            <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: 4 }}>⏱ {day.strength.rest}</Text>
-          </View>
-        )}
-
-        {/* WOD */}
-        {day.wod && (day.wod.movements || day.wod.parts || day.wod.emomMinutes) && (
-          <View style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.accent + '30', borderRadius: 10, padding: 14, marginBottom: 10 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-              <Text style={{ flex: 1, fontSize: t.fs(12), fontWeight: '700', letterSpacing: 2, color: t.accent }}>
-                ⚡ WOD{day.wod.parts ? ` — DOBLE WOD` : day.wod.type ? ` — ${day.wod.type} ${day.wod.duration}` : ''}
-              </Text>
-              {extractMovements(day.wod).length > 0 && (
-                <TouchableOpacity onPress={() => setShowAdaptModal(true)}
-                  style={{ backgroundColor: hasAdaptacion ? t.accent + '20' : t.bg4, borderWidth: 1, borderColor: hasAdaptacion ? t.accent : t.border, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 }}>
-                  <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: hasAdaptacion ? t.accent : t.text3 }}>
-                    {hasAdaptacion ? '✏️ Adaptado' : '✏️ Adaptar'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* WOD con múltiples partes */}
-            {effectiveWod.parts ? effectiveWod.parts.map((part, pi) => (
-              <View key={pi} style={{ marginBottom: pi < effectiveWod.parts.length - 1 ? 14 : 0 }}>
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                  <View style={{ backgroundColor: t.accent + '20', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 }}>
-                    <Text style={{ fontSize: t.fs(9), fontWeight: '700', color: t.accent }}>WOD {pi + 1} · {part.type} · {part.duration}</Text>
-                  </View>
-                  {part.format && <View style={{ backgroundColor: t.bg4, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 }}>
-                    <Text style={{ fontSize: t.fs(9), color: t.text2 }}>{part.format}</Text>
-                  </View>}
-                </View>
-                {part.formatNote && (
-                  <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 8 }}>
-                    <Text style={{ fontSize: t.fs(11), color: t.text2 }}>{part.formatNote}</Text>
-                  </View>
-                )}
-                {part.movements?.filter(m => m.name !== '—').map((m, i) => {
-                  const adapted = adaptacion?.movements?.find(a => a.name === m.name);
-                  return (
-                  <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: adapted ? t.accent + '10' : t.bg4, borderLeftWidth: 3, borderLeftColor: adapted ? t.accent : t.accent + '60', borderRadius: 8, padding: 10, marginBottom: 6 }}>
-                    <Text style={{ minWidth: 38, fontSize: t.fs(13), fontWeight: '700', color: t.accent }}>{m.reps}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{m.name}</Text>
-                      {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: adapted ? t.accent : t.text2, marginTop: 2 }}>{m.weight}{adapted ? ' ✏️' : ''}</Text>}
-                    </View>
-                  </View>
-                  );
-                })}
-                {pi < effectiveWod.parts.length - 1 && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 }}>
-                    <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
-                    <Text style={{ fontSize: t.fs(9), color: t.text3, fontWeight: '700', letterSpacing: 2 }}>2 MIN DESCANSO</Text>
-                    <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
-                  </View>
-                )}
-              </View>
-            )) : null}
-
-            {/* WOD EMOM */}
-            {!effectiveWod.parts && effectiveWod.emomMinutes && (
-              <>
-                {effectiveWod.formatNote && (
-                  <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 8 }}>
-                    <Text style={{ fontSize: t.fs(11), color: t.text2 }}>{effectiveWod.formatNote}</Text>
-                  </View>
-                )}
-                {effectiveWod.emomMinutes.map((min, i) => (
-                  <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: t.bg4, borderLeftWidth: 3, borderLeftColor: t.accent, borderRadius: 8, padding: 10, marginBottom: 6 }}>
-                    <Text style={{ minWidth: 52, fontSize: t.fs(10), fontWeight: '700', color: t.accent }}>{min.min}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: t.fs(13), fontWeight: '700', color: t.text }}>{min.work}</Text>
-                      {min.weight && min.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: t.text2, marginTop: 2 }}>{min.weight}</Text>}
-                    </View>
-                  </View>
-                ))}
-              </>
-            )}
-
-            {/* WOD LADDER / estándar */}
-            {!effectiveWod.parts && !effectiveWod.emomMinutes && effectiveWod.movements && (
-              <>
-                {effectiveWod.formatNote && (
-                  <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 8 }}>
-                    <Text style={{ fontSize: t.fs(11), color: t.text2 }}>⚡ {effectiveWod.format} — {effectiveWod.formatNote}</Text>
-                  </View>
-                )}
-                {effectiveWod.ladderNote && (
-                  <View style={{ backgroundColor: t.bg4, borderRadius: 6, padding: 8, marginBottom: 8 }}>
-                    <Text style={{ fontSize: t.fs(11), color: t.text2 }}>📐 {effectiveWod.ladderNote}</Text>
-                  </View>
-                )}
-                {effectiveWod.movements.filter(m => m.name !== '—').map((m, i) => {
-                  const adapted = adaptacion?.movements?.find(a => a.name === m.name);
-                  return (
-                    <View key={i} style={{ flexDirection: 'row', gap: 10, backgroundColor: adapted ? t.accent + '10' : t.bg4, borderLeftWidth: 3, borderLeftColor: adapted ? t.accent : t.accent + '60', borderRadius: 8, padding: 10, marginBottom: 7 }}>
-                      <Text style={{ minWidth: 38, fontSize: t.fs(13), fontWeight: '700', color: t.accent }}>{m.reps}</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: t.fs(14), fontWeight: '700', color: t.text }}>{m.name}</Text>
-                        {m.weight && m.weight !== 'BW' && <Text style={{ fontSize: t.fs(11), color: adapted ? t.accent : t.text2, marginTop: 2 }}>{m.weight}{adapted ? ' ✏️' : ''}</Text>}
-                      </View>
-                    </View>
-                  );
-                })}
-              </>
-            )}
-
-            {day.wod.gymNote && (
-              <View style={{ backgroundColor: t.dark ? '#080f08' : '#e8f5e9', borderWidth: 1, borderColor: t.dark ? '#1e3e1e' : '#c8e6c9', borderRadius: 6, padding: 10, marginTop: 4 }}>
-                <Text style={{ fontSize: t.fs(11), color: '#5a9a5a' }}>💡 {day.wod.gymNote}</Text>
-              </View>
-            )}
+            </TouchableOpacity>
+          ) : null)}
+          wodFooter={() => (
             <TouchableOpacity onPress={() => navigate('TIMER')}
               style={{ backgroundColor: t.accent, borderRadius: 8, padding: 14, alignItems: 'center', marginTop: 12 }}>
               <Text style={{ color: '#fff', fontWeight: '900', fontSize: t.fs(14), letterSpacing: 1 }}>▶ INICIAR TIMER</Text>
             </TouchableOpacity>
-          </View>
-        )}
+          )}
+        />
 
         {/* PROGRESIÓN */}
         <ProgressStrip resultados={resultados} currentDayKey={day.day} day={day} allDaysFlat={allDaysFlat} t={t} />
@@ -764,20 +496,17 @@ export default function WodScreen({ navigate }) {
         })()}
 
         {/* ANOTAR RESULTADOS — multi-bloque */}
-        {dayParts.length >= 2 && (
+        {dayParts.length >= 1 && (
           <View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <Text style={{ fontSize: t.fs(10), color: '#4caf50', letterSpacing: 2, fontWeight: '700' }}>✏️ ANOTAR RESULTADOS</Text>
               {saved && <Text style={{ fontSize: t.fs(10), color: '#52b788', fontWeight: '700' }}>✓ GUARDADO</Text>}
             </View>
             {dayParts.map(part => (
-              <PartResultCard key={part.key} part={part} pr={partResults[part.key]} onChange={fields => updatePart(part.key, fields)} t={t} />
+              <PartResultInput key={part.key} part={part} state={partResults[part.key]} onChange={fields => updatePart(part.key, fields)} t={t} />
             ))}
             {(() => {
-              const filled = dayParts.filter(p => {
-                const pr = partResults[p.key] || {};
-                return p.isStrength ? !!pr.resultado : !!(pr.minutos || pr.rondas);
-              }).length;
+              const filled = dayParts.filter(p => partHasData(p, partResults[p.key])).length;
               return (
                 <>
                   <TouchableOpacity onPress={guardarPartes}
@@ -807,7 +536,7 @@ export default function WodScreen({ navigate }) {
         )}
 
         {/* ANOTAR RESULTADO — bloque único */}
-        {dayParts.length < 2 && (
+        {dayParts.length < 1 && (
         <View style={{ backgroundColor: t.dark ? '#06100a' : '#e8f5e9', borderWidth: 1, borderColor: t.dark ? '#2e6e3250' : '#c8e6c9', borderRadius: 10, padding: 14 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <Text style={{ fontSize: t.fs(10), color: '#4caf50', letterSpacing: 2, fontWeight: '700' }}>✏️ ANOTAR RESULTADO</Text>

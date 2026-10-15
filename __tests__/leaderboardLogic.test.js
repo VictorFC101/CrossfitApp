@@ -180,3 +180,19 @@ describe('vista del ranking: formatMark, gapToFirst, detailParts, relativeTime',
     expect(effectiveScoring([r('a', '10:00')], 'time')).toBe('time');
   });
 });
+
+describe('integración con resultados tipados (formato-flexible)', () => {
+  const { rankLeaderboard, scoreOfRow } = require('../leaderboardLogic');
+  it('puntúa partes por bloques con "N reps" y resumen etiquetado', () => {
+    const a = { rx: true, resultado: 'WOD: 50 reps', partes: [{ key: 'b2', label: 'WOD', scoreType: 'reps', resultado: '50 reps' }] };
+    const b = { rx: true, resultado: 'WOD: 60 reps', partes: [{ key: 'b2', label: 'WOD', scoreType: 'reps', resultado: '60 reps' }] };
+    expect(rankLeaderboard([a, b], 'reps').rx.map(r => r.pos)).toEqual([1, 2]);
+  });
+  it('ignora la carga (kg × reps con coma) como marca de WOD', () => {
+    const r = { rx: true, resultado: 'FUERZA: 57,5 kg × 3', partes: [{ key: 'strength', scoreType: 'load', resultado: '57,5 kg × 3' }] };
+    expect(scoreOfRow(r, 'time')).toBeNull();
+  });
+  it('lee un resumen "LABEL: mm:ss" sin partes', () => {
+    expect(scoreOfRow({ resultado: 'WOD: 08:45' }, 'time')).toBe(525);
+  });
+});

@@ -2,6 +2,9 @@ import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, Alert, Acti
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants';
+import { validateProgram, formatValidationIssues } from '../programValidation';
+import { formatProgramSummary } from '../builderLogic';
+import { confirmar } from './admin/ui';
 import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { parseDateFromDay } from '../dateUtils';
@@ -18,7 +21,6 @@ import { mayo2026 } from '../assets/mayo2026';
 import { junio2026 } from '../assets/junio2026';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import { confirmar } from '../utils/confirm';
 
 const MESES_LARGOS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -239,15 +241,25 @@ function AddJsonModal({ visible, onClose, onSave }) {
           throw new Error(`${parseErr.message} (archivo de ${text.length} caracteres — revisa que esté completo)`);
         }
       }
-      if (!parsed.weeks || !Array.isArray(parsed.weeks)) throw new Error('Falta el campo "weeks"');
-      if (parsed.weeks.length === 0) throw new Error('"weeks" no puede estar vacío');
-      for (const w of parsed.weeks) {
-        if (!w.days || !Array.isArray(w.days)) throw new Error('Cada semana necesita un array "days"');
+      const validation = validateProgram(parsed);
+      if (!validation.ok) {
+        Alert.alert('Programa no válido', formatValidationIssues(validation.errors, 8));
+        throw new Error(`El programa tiene ${validation.errors.length} error(es):\n${formatValidationIssues(validation.errors, 8)}`);
       }
       const stripped = stripProgramDates(parsed);
-      setPreview(stripped);
-      setProgramName(stripped.name || '');
-      setError('');
+      const accept = () => { setPreview(stripped); setProgramName(stripped.name || ''); setError(''); };
+      if (validation.warnings.length) {
+        // confirm web-safe (Alert con botones no funciona en react-native-web)
+        confirmar('Avisos del programa',
+          `${formatProgramSummary(stripped, validation.warnings)}
+
+${formatValidationIssues(validation.warnings, 8)}
+
+¿Continuar?`,
+          'Continuar', accept);
+      } else {
+        accept();
+      }
     } catch (e) {
       setError(e.message);
       setPreview(null);
@@ -306,6 +318,9 @@ function AddJsonModal({ visible, onClose, onSave }) {
                 <Text style={{ color: '#52b788', fontSize: t.fs(12), fontWeight: '700', marginBottom: 6 }}>✅ Archivo válido</Text>
                 <Text style={{ color: '#52b788', fontSize: t.fs(11), marginBottom: 2 }}>
                   {preview.weeks.length} semanas · {preview.weeks.reduce((a, w) => a + w.days.length, 0)} días · Fechas eliminadas
+                </Text>
+                <Text style={{ color: '#52b788', fontSize: t.fs(11), marginTop: 6, lineHeight: t.fs(16) }}>
+                  {formatProgramSummary(preview)}
                 </Text>
                 {fileSize > 0 && (
                   <Text style={{ color: '#52b788', fontSize: t.fs(10), marginTop: 2, opacity: 0.8 }}>
