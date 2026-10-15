@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from './supabase';
 import { STORAGE_KEYS } from './constants';
-import { addToCart, removeFromCart, setQty, cartTotal, cartCount, estadoMembresia } from './lib/payments';
+import { addToCart, removeFromCart, setQty, cartTotal, cartCount, estadoMembresia, unirSuscripciones } from './lib/payments';
 
 const PaymentContext = createContext(null);
 
@@ -59,23 +59,27 @@ export function PaymentProvider({ userId, children }) {
     setLoading(true);
     setError(null);
     try {
-      const [rProd, rPlan, rSus, rPed] = await Promise.all([
+      const [rProd, rPlan, rSus, rSusVivas, rPed] = await Promise.all([
         supabase.from('productos').select('*, variantes:producto_variantes(*)').eq('activo', true).order('nombre'),
         supabase.from('planes').select('*').eq('activo', true).order('precio_cents'),
         supabase.from('suscripciones').select('*, plan:plan_id(*)').eq('usuario_id', userId)
           .order('created_at', { ascending: false }).limit(5),
+        // Las activas/impagadas se piden aparte: los intentos de pago abandonados (pendiente)
+        // podrían sacar una membresía vigente de las 5 más recientes.
+        supabase.from('suscripciones').select('*, plan:plan_id(*)').eq('usuario_id', userId)
+          .in('estado', ['activa', 'impago']).order('periodo_fin', { ascending: false }).limit(5),
         supabase.from('pedidos')
           .select('*, items:pedido_items(*, producto:producto_id(nombre), variante:variante_id(etiqueta))')
           .eq('usuario_id', userId).order('created_at', { ascending: false }).limit(50),
       ]);
-      const fallo = [rProd, rPlan, rSus, rPed].find(r => r.error);
+      const fallo = [rProd, rPlan, rSus, rSusVivas, rPed].find(r => r.error);
       if (fallo) throw fallo.error;
       setProductos((rProd.data || []).map(p => ({
         ...p,
         variantes: (p.variantes || []).filter(v => v.activo !== false),
       })));
       setPlanes(rPlan.data || []);
-      setSuscripcion(rSus.data || []);
+      setSuscripcion(unirSuscripciones(rSusVivas.data, rSus.data));
       setPedidos(rPed.data || []);
     } catch (e) {
       setError('No se pudo cargar la tienda. Comprueba tu conexión e inténtalo de nuevo.');

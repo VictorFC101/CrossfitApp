@@ -1,6 +1,6 @@
 import {
   formatPrecio, cartTotal, cartCount, addToCart, removeFromCart, setQty,
-  estadoMembresia, etiquetaPlan,
+  estadoMembresia, etiquetaPlan, unirSuscripciones,
 } from '../lib/payments';
 
 const camiseta = { producto_id: 'p1', variante_id: 'v1', precio_cents: 2500, cantidad: 1 };
@@ -89,5 +89,25 @@ describe('etiquetaPlan', () => {
     expect(etiquetaPlan({ tipo: 'prepago', meses: 12 })).toBe('Anual');
     expect(etiquetaPlan({ tipo: 'prepago', meses: 1 })).toBe('1 mes');
     expect(etiquetaPlan(null)).toBe('');
+  });
+});
+
+describe('unirSuscripciones', () => {
+  const activa = { id: 'a', estado: 'activa', periodo_fin: '2026-11-09T00:00:00Z' };
+  const pendientes = ['p1', 'p2', 'p3', 'p4', 'p5'].map(id => ({ id, estado: 'pendiente' }));
+
+  test('una membresía activa no se pierde tras cinco intentos pendientes más recientes', () => {
+    const r = unirSuscripciones([activa], pendientes);
+    expect(r[0]).toBe(activa);
+    expect(r).toHaveLength(6);
+    expect(estadoMembresia(r.find(s => estadoMembresia(s, new Date('2026-10-10')).activa), new Date('2026-10-10')).activa).toBe(true);
+  });
+  test('sin duplicados si la activa también está entre las recientes', () => {
+    const r = unirSuscripciones([activa], [activa, ...pendientes.slice(0, 2)]);
+    expect(r.map(s => s.id)).toEqual(['a', 'p1', 'p2']);
+  });
+  test('tolera listas vacías o nulas', () => {
+    expect(unirSuscripciones(null, undefined)).toEqual([]);
+    expect(unirSuscripciones([], pendientes.slice(0, 1))).toHaveLength(1);
   });
 });
