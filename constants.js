@@ -183,3 +183,15 @@ export const BLOCK_KIND_LABELS = {
 export const SCORE_TYPE_LABELS = {
   time: 'Tiempo', rounds_reps: 'Rondas + reps', load: 'Carga', reps: 'Repeticiones', none: 'Sin marcador',
 };
+// Vista de coach: umbrales de actividad (días desde el último registro)
+export const COACH_ACTIVO_DIAS = 3;
+export const COACH_INACTIVO_DIAS = 7;
+export const COACH_ADHERENCIA_DIAS = 7;
+export const COACH_ESTADOS = {
+  activo:    { label: 'Activo',    emoji: '🟢' },
+  irregular: { label: 'Irregular', emoji: '🟡' },
+  inactivo:  { label: 'Inactivo',  emoji: '🔴' },
+};
+export const COACH_NOTAS_HINT = 'Tu coach puede ver tus notas.';
+export const COACH_SIN_PERMISO = 'Solo coaches y admins pueden ver esta sección.';
+export const COACH_VACIO = 'No tienes atletas todavía. Los atletas de tu box y a los que asignes un programa aparecerán aquí.';

@@ -53,6 +53,11 @@ You are the **orchestrator**. Plan, delegate, and check work. Do not do the work
 - Exception: a tiny task (one quick read, a one-line edit, or a single command) costs less done directly than through a subagent. Do it inline.
 
 ### Pick a model for each subtask
+**No uses Opus para todo.** Orden obligatorio en cada tarea:
+1. Primero analiza el código con graphify (`graphify query` / `path` / `explain`) para entender el alcance real.
+2. Divide la tarea en subtareas y, según la dificultad de cada una, asígnale un modelo con la tabla de abajo.
+3. Opus solo cuando la subtarea sea de complejidad alta o un modelo más barato haya fallado.
+
 Before starting each subtask, rate how hard it is and pick the cheapest model that can do it well:
 
 | Complexity | Model | Typical tasks |

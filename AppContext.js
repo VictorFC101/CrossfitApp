@@ -96,7 +96,7 @@ export function AppProvider({ children }) {
       // Traer campos privados que la vista pública no expone
       const { data: privateData } = await supabase
         .from('usuarios')
-        .select('onboarding_completed, genero, box_id, partner_id')
+        .select('onboarding_completed, genero, box_id, partner_id, mostrar_en_ranking')
         .eq('id', uid)
         .single();
 
@@ -386,7 +386,9 @@ export function AppProvider({ children }) {
   const saveResultado = async (key, data) => {
     // benchmark_key: si el llamador no lo indica (p. ej. edición desde Historial), conservar el del día
     const benchmarkKey = data.benchmark_key !== undefined ? data.benchmark_key : (resultados[key]?.benchmark_key || null);
-    data = { ...data, benchmark_key: benchmarkKey };
+    // programa_id: igual que benchmark_key, si el llamador no lo indica se conserva el del día
+    const programaId = data.programa_id !== undefined ? data.programa_id : (resultados[key]?.programa_id || null);
+    data = { ...data, benchmark_key: benchmarkKey, programa_id: programaId };
     const updated = { ...resultados, [key]: data };
     setResultados(updated);
     try {
@@ -404,6 +406,7 @@ export function AppProvider({ children }) {
           adaptacion: data.adaptacion || null,
           partes: data.partes || null,
           benchmark_key: benchmarkKey,
+          programa_id: programaId,
         }, { onConflict: 'user_id,dia' });
         if (resErr) console.warn('saveResultado: error guardando en resultados', resErr.message);
         // Publicar en feed social — eliminar entrada anterior del mismo día antes de insertar

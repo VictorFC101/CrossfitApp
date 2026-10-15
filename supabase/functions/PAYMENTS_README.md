@@ -1,7 +1,7 @@
 # Pagos con Stripe (modo test)
 
 Funciones: `create-checkout`, `stripe-webhook`, `create-portal-session`.
-Migración: `supabase/migrations/016_pagos_stripe.sql` (tablas `productos`, `producto_variantes`, `planes`, `clientes_stripe`, `pedidos`, `pedido_items`, `suscripciones`, `pagos` + RLS).
+Migraciones: `supabase/migrations/016_pagos_stripe.sql` (tablas `productos`, `producto_variantes`, `planes`, `clientes_stripe`, `pedidos`, `pedido_items`, `suscripciones`, `pagos` + RLS) y `017_pagos_hardening.sql` (solo admins actualizan pedidos/suscripciones, triggers guard, CHECK `activa` ⇒ `periodo_fin`, `suscripciones.stripe_payment_intent`, RPC `marcar_pedido_pagado`).
 
 ## 1. Secrets
 
@@ -18,7 +18,8 @@ supabase secrets set \
 ## 2. Migración y despliegue
 
 ```bash
-supabase db push                                   # aplica 016_pagos_stripe.sql
+supabase db push                                   # aplica 016_pagos_stripe.sql y 017_pagos_hardening.sql
+# 017 debe estar aplicada ANTES de desplegar stripe-webhook (usa marcar_pedido_pagado y stripe_payment_intent)
 supabase functions deploy create-checkout
 supabase functions deploy create-portal-session
 supabase functions deploy stripe-webhook --no-verify-jwt   # Stripe no envía JWT
@@ -43,6 +44,8 @@ Dashboard → Developers → Webhooks → endpoint `https://<ref>.supabase.co/fu
 - `invoice.payment_failed`
 - `customer.subscription.updated`
 - `customer.subscription.deleted`
+- `charge.refunded`
+- `charge.dispute.created`
 
 Copia el *signing secret* (`whsec_...`) a `STRIPE_WEBHOOK_SECRET`.
 Activa también el **Customer Portal** (Settings → Billing → Customer portal) para `create-portal-session`.
@@ -72,6 +75,9 @@ Reenviar eventos: `stripe events resend <evt_id>` (los duplicados se ignoran gra
 ## Notas
 
 - Los precios se leen siempre de la BD; el cliente solo envía ids y cantidades.
-- El stock se valida al crear la sesión y se descuenta al recibir el pago (`decrementar_stock`, nunca baja de 0).
+- El stock se valida al crear la sesión y se descuenta al recibir el pago (RPC `marcar_pedido_pagado`: pendiente → pagado + stock en una transacción, nunca baja de 0 ni se descuenta dos veces).
 - Retorno a la app: `${base}/pago/exito?session_id=...`, `${base}/pago/cancelado`, `${base}/pago/portal`.
-- Las tablas de dinero solo las escribe el service role; admins/coaches pueden cambiar `estado` de pedidos y suscripciones.
+- Las tablas de dinero solo las escribe el service role. Desde la app solo un **admin** puede cambiar `estado`, y solo "hacia abajo": suscripción → `cancelada`/`vencida`; pedido `pagado` → `entregado` y `pendiente`/`pagado` → `cancelado`. Los coaches solo leen.
+- Idempotencia: cada evento se reclama en `pagos` (`stripe_event_id` UNIQUE, estado `procesando`). Si la función muere a mitad, un reintento de Stripe retoma el evento cuando la reclamación tiene más de 7 min; mientras tanto responde 409 para que Stripe siga reintentando.
+- **Reembolsos (`charge.refunded`)**: reembolso total de un pedido → `cancelado`; de un prepago → suscripción `cancelada` con `periodo_fin` = ahora. Si el cargo es de una factura de suscripción recurrente solo se registra en `pagos` (`reembolsado`) y la suscripción no se cancela (cancélala desde Stripe si procede). Los reembolsos parciales solo se registran (`reembolso_parcial`). **No se repone stock automáticamente.**
+- **Disputas (`charge.dispute.created`)**: se registran en `pagos` con estado `disputa` y se escribe un `console.error` en los logs de la función; no cambian pedidos ni suscripciones (revisar a mano en Stripe).

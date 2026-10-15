@@ -5,7 +5,7 @@ import { useTheme } from '../ThemeContext';
 import { useProgram } from '../ProgramContext';
 import { useSocial } from '../SocialContext';
 import { MOVEMENTS_DB, CATEGORIES, CATEGORY_COLORS } from '../movements_db';
-import { RM_NAMES, TYPE_COLORS as SHARED_TYPE_COLORS } from '../constants';
+import { RM_NAMES, TYPE_COLORS as SHARED_TYPE_COLORS, COACH_NOTAS_HINT } from '../constants';
 import { parseDateFromDay } from '../dateUtils';
 import { useShareResult } from '../hooks/useShareResult';
 import { fromProgramDay, fromWodLibre } from '../shareResultLogic';
@@ -15,6 +15,7 @@ import BenchmarkCard from './BenchmarkCard';
 import DayBlocks from '../components/DayBlocks';
 import PartResultInput from '../components/PartResultInput';
 import { getScorableParts, isSingleLegacyWod, partStateFromSaved, buildPartItem, summarizeParts } from '../resultLogic';
+import LeaderboardCard from './LeaderboardCard';
 
 const rmNames = RM_NAMES;
 
@@ -157,6 +158,7 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
                 multiline numberOfLines={3}
                 style={{ backgroundColor: ibg, borderWidth: 1, borderColor: iborder, borderRadius: 8, color: icolor, fontSize: t.fs(13), padding: 12, textAlignVertical: 'top', marginBottom: 10 }}
               />
+              <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: -6, marginBottom: 10 }}>{COACH_NOTAS_HINT}</Text>
             </View>
           )}
 
@@ -172,6 +174,11 @@ function EditResultModal({ visible, day, savedResult, onSave, onClose }) {
               </Text>
             </TouchableOpacity>
           ) : null}
+          {day?.wod && day.type !== 'Libre' && (
+            <View style={{ marginTop: 14 }}>
+              <LeaderboardCard day={day} programaId={savedResult?.programa_id ?? null} refreshKey={0} />
+            </View>
+          )}
         </ScrollView>
         <ShareHost />
       </View>
@@ -478,6 +485,7 @@ function WodCreator({ visible, onClose, onSave }) {
               placeholderTextColor={t.text3}
               multiline numberOfLines={3}
               style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 10, color: t.text, fontSize: t.fs(13), padding: 14, textAlignVertical: 'top', minHeight: 80 }} />
+            <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: 4 }}>{COACH_NOTAS_HINT}</Text>
           </View>
 
           {/* GUARDAR */}

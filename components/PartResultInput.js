@@ -1,5 +1,5 @@
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
-import { SCORE, RX_COLORS } from '../constants';
+import { SCORE, RX_COLORS, COACH_NOTAS_HINT } from '../constants';
 
 // Entrada de resultado de una parte puntuable, según su tipo de marcador.
 //   part:  { key, label, scoreType, blockKind, wodType?, duration? }
@@ -105,6 +105,7 @@ export default function PartResultInput({ part, state, onChange, t }) {
       <TextInput value={st.notas || ''} onChangeText={v => onChange({ notas: v })}
         placeholder="Notas..." placeholderTextColor={t.text3} multiline numberOfLines={2}
         style={{ backgroundColor: t.bg4, borderWidth: 1, borderColor: t.border, borderRadius: 8, color: t.text, fontSize: t.fs(13), padding: 12, textAlignVertical: 'top' }} />
+      <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: 4 }}>{COACH_NOTAS_HINT}</Text>
     </View>
   );
 }

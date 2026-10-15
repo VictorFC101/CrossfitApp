@@ -47,6 +47,8 @@ const RE_TIME = /^(\d{1,2}):(\d{2})$/;
 const RE_TIME_H = /^(\d+):(\d{2}):(\d{2})$/;
 const RE_ROUNDS = /^(\d+)\+(\d+)$/;
 const RE_INT = /^\d+$/;
+const RE_REPS = /^(\d+)\s*(?:reps?)?$/i; // "50" o "50 reps" (formato de PartResultInput)
+const RE_LABEL_PREFIX = /^[^\d:][^:]*:\s+/; // "WOD: " de resumenes multiparte
 
 /**
  * Convierte el texto de resultado en un número comparable:
@@ -59,7 +61,7 @@ export function parseScore(resultado, scoring) {
     const v = parsePartResult(SCORE.LOAD, resultado);
     return v ? v.kg : null;
   }
-  const partes = resultado.split(' · ').map(s => s.trim()).filter(Boolean);
+  const partes = resultado.split(' · ').map(s => s.trim().replace(RE_LABEL_PREFIX, '')).filter(Boolean);
   for (const p of partes) {
     if (scoring === 'time') {
       let m = RE_TIME_H.exec(p);
@@ -71,7 +73,8 @@ export function parseScore(resultado, scoring) {
       if (m) return (+m[1]) * 1000 + (+m[2]);
       if (RE_INT.test(p)) return parseInt(p, 10) * 1000; // solo rondas completas
     } else if (scoring === 'reps') {
-      if (RE_INT.test(p)) return parseInt(p, 10);
+      const m = RE_REPS.exec(p);
+      if (m) return parseInt(m[1], 10);
     }
   }
   return null;

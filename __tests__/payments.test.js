@@ -70,6 +70,12 @@ describe('estadoMembresia', () => {
     expect(r.activa).toBe(false);
     expect(r.etiqueta).toBe('Vencida');
   });
+  test('activa sin fecha de fin válida no se considera activa', () => {
+    const sinFin = estadoMembresia({ estado: 'activa', periodo_fin: null }, now);
+    expect(sinFin.activa).toBe(false);
+    expect(sinFin.etiqueta).toBe('Vencida');
+    expect(estadoMembresia({ estado: 'activa', periodo_fin: 'no-es-fecha' }, now).activa).toBe(false);
+  });
   test('impago y cancelada no están activas', () => {
     expect(estadoMembresia({ estado: 'impago', periodo_fin: '2026-02-01' }, now).activa).toBe(false);
     expect(estadoMembresia({ estado: 'cancelada' }, now).etiqueta).toBe('Cancelada');

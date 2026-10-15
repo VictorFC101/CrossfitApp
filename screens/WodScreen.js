@@ -7,7 +7,7 @@ import { getTodayDay, isTodayInProgram, formatDateShort, getToday } from '../dat
 import { useToday } from '../hooks/useToday';
 import { useShareResult } from '../hooks/useShareResult';
 import { fromProgramDay } from '../shareResultLogic';
-import { RM_CATEGORIES } from '../constants';
+import { RM_CATEGORIES, COACH_NOTAS_HINT } from '../constants';
 import { getBenchmark } from '../benchmarks';
 import { detectDayBenchmark, getBenchmarkHistory, evaluateNewMark } from '../benchmarkLogic';
 import BenchmarkCard from './BenchmarkCard';
@@ -19,6 +19,7 @@ import {
   getScorableParts, isSingleLegacyWod, partStateFromSaved, buildPartItem, partHasData, summarizeParts, bestLoadOfResultado,
 } from '../resultLogic';
 import { RM_KEY_NAMES, RM_NAME_PATTERNS, inferRmKeysFromText, getEffectiveRM } from '../wodLogic';
+import LeaderboardCard from './LeaderboardCard';
 
 
 const TYPE_COLORS = {
@@ -265,6 +266,7 @@ export default function WodScreen({ navigate }) {
   const [minutos, setMinutos]     = useState('');
   const [segundos, setSegundos]   = useState('');
   const [saved, setSaved]         = useState(false);
+  const [lbRefresh, setLbRefresh] = useState(0); // fuerza recarga de la clasificación tras guardar
   const [markMsg, setMarkMsg]     = useState(null); // comparación con la última vez tras guardar
   const [adaptacion, setAdaptacion] = useState(null);
   const [showAdaptModal, setShowAdaptModal] = useState(false);
@@ -320,9 +322,10 @@ export default function WodScreen({ navigate }) {
     const partes = dayParts.map(p => buildPartItem(p, partResults[p.key]));
     await saveResultado(day.day, {
       resultado: summarizeParts(partes), notas: '', fecha: new Date().toISOString(),
-      rx: partes.every(p => p.rx), adaptacion, partes,
+      rx: partes.every(p => p.rx), adaptacion, partes, programa_id: activeProgram?.id ?? null,
     });
     setSaved(true);
+    setLbRefresh(k => k + 1);
     setTimeout(() => setSaved(false), 2000);
   };
 
@@ -336,8 +339,9 @@ export default function WodScreen({ navigate }) {
     const evalMark = bm
       ? evaluateNewMark({ resultado: finalResultado, rx }, getBenchmarkHistory(bm.key, resultados, wodsLibres, { excludeDia: day.day }), bm.scoring)
       : null;
-    await saveResultado(day.day, { resultado: finalResultado, notas, fecha: new Date().toISOString(), rx, adaptacion, benchmark_key: dayBenchmark });
+    await saveResultado(day.day, { resultado: finalResultado, notas, fecha: new Date().toISOString(), rx, adaptacion, benchmark_key: dayBenchmark, programa_id: activeProgram?.id ?? null });
     setSaved(true);
+    setLbRefresh(k => k + 1);
     setTimeout(() => setSaved(false), 2000);
     if (evalMark) {
       setMarkMsg(evalMark.message);
@@ -602,6 +606,7 @@ export default function WodScreen({ navigate }) {
             multiline numberOfLines={3}
             style={{ backgroundColor: t.dark ? '#080e0a' : '#fff', borderWidth: 1, borderColor: t.dark ? '#1a3a1e' : '#c8e6c9', borderRadius: 8, color: t.dark ? '#81c784' : '#2e7d32', fontSize: t.fs(13), padding: 12, textAlignVertical: 'top', marginBottom: 10 }}
           />
+          <Text style={{ fontSize: t.fs(10), color: t.text3, marginTop: -6, marginBottom: 10 }}>{COACH_NOTAS_HINT}</Text>
 
           {/* Botones */}
           <TouchableOpacity onPress={guardar}
@@ -624,6 +629,10 @@ export default function WodScreen({ navigate }) {
             </TouchableOpacity>
           )}
         </View>
+        )}
+
+        {day?.wod && day.type !== 'Libre' && (
+          <LeaderboardCard day={day} programaId={activeProgram?.id ?? null} refreshKey={lbRefresh} />
         )}
 
       </ScrollView>
